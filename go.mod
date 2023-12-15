@@ -1,6 +1,6 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module terraform-provider-godaddy-dns
 
-go 1.20
+go 1.21
 
 require (
 	github.com/hashicorp/terraform-plugin-docs v0.16.0
@@ -8,6 +8,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.20.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.6.0
+	github.com/hashicorp/terraform-provider-scaffolding-framework v0.0.0-20231215163836-0141aa5ef34e
 )
 
 require (
