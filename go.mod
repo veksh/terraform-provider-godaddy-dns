@@ -1,4 +1,4 @@
-module terraform-provider-godaddy-dns
+module github.com/veksh/terraform-provider-godaddy-dns
 
 go 1.21
 
@@ -8,7 +8,6 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.20.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-testing v1.6.0
-	github.com/hashicorp/terraform-provider-scaffolding-framework v0.0.0-20231215163836-0141aa5ef34e
 )
 
 require (
@@ -62,7 +61,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/zclconf/go-cty v1.14.1 // indirect
-	golang.org/x/crypto v0.16.0 // indirect
+	golang.org/x/crypto v0.17.0 // indirect
 	golang.org/x/exp v0.0.0-20230809150735-7b3493d9a819 // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.17.0 // indirect

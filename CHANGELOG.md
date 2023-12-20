@@ -1,3 +1,6 @@
-## 0.1.0 (Unreleased)
+# Changelog
 
-FEATURES:
+## unreleased
+
+- cleanup: rename packages from inherited template, update readme etc
+
