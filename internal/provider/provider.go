@@ -46,11 +46,11 @@ func (p *GoDaddyDNSProvider) Schema(ctx context.Context, req provider.SchemaRequ
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "GoDaddy API key",
-				Required:            false,
+				Optional:            true,
 			},
 			"api_secret": schema.StringAttribute{
 				MarkdownDescription: "GoDaddy API secret",
-				Required:            false,
+				Optional:            true,
 			},
 		},
 		// also: Blocks

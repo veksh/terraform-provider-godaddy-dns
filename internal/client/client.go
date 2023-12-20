@@ -18,6 +18,9 @@ import (
 
 // also: https://github.com/go-resty/resty
 
+// to view actual records
+// curlie -v GET "https://api.godaddy.com/v1/domains/veksh.in/records" -H "Authorization: sso-key $GODADDY_API_KEY:$GODADDY_API_SECRET"
+
 const (
 	HTTP_TIMEOUT = 10
 	HTTP_RPS     = 1
