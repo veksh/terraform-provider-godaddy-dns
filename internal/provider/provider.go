@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"net/http"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -13,7 +12,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 )
+
+// testing api at ote is useless
+const GODADDY_API_URL = "https://api.godaddy.com"
 
 // https://pkg.go.dev/github.com/hashicorp/terraform-plugin-framework/provider
 var _ provider.Provider = &GoDaddyDNSProvider{}
@@ -89,18 +92,18 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 		return
 	}
 
-	// err := makeClient()
-	// if err != nil {
-	// 	resp.Diagnostics.AddError("failed to create API client", err.Error())
-	// 	return
-	// }
-	client := http.DefaultClient
+	client, err := client.NewClient(GODADDY_API_URL, apiKey, apiSecret)
+	if err != nil {
+		resp.Diagnostics.AddError("failed to create API client", err.Error())
+		return
+	}
+
 	resp.ResourceData = client
 }
 
 func (p *GoDaddyDNSProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		NewRecordResource,
 	}
 }
 

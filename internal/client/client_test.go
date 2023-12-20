@@ -41,6 +41,9 @@ func TestGetRecords_ReturnsOneCname(t *testing.T) {
 		TTL:  3600,
 	}}
 	c, err := NewClient(ts.URL, "dummyAPIKey", "dummyAPISecret")
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, err := c.GetRecords(context.Background(), "test.com", "CNAME", "cn")
 	if err != nil {
 		t.Fatal(err)
@@ -61,6 +64,9 @@ func TestGetRecords_FailsOnError(t *testing.T) {
 	defer ts.Close()
 
 	c, err := NewClient(ts.URL, "dummyAPIKey", "dummyAPISecret")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = c.GetRecords(context.Background(), "test.com", "CNAME", "cn")
 	if err == nil {
 		t.Fatal("got no error for malformed reply")
@@ -78,6 +84,9 @@ func TestGetRecords_SetsAuthHeaders(t *testing.T) {
 		}))
 	defer ts.Close()
 	c, err := NewClient(ts.URL, "dummyAPIKey", "dummyAPISecret")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = c.GetRecords(context.Background(), "test.com", "CNAME", "cn")
 	if err != nil {
 		t.Fatal(err)

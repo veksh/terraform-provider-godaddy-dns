@@ -101,6 +101,9 @@ func (c Client) makeRecordsRequest(ctx context.Context, path string, method stri
 	defer fnCancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot create request")
+	}
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Accept", "application/json")
