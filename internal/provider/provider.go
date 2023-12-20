@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -14,71 +15,102 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
+// https://pkg.go.dev/github.com/hashicorp/terraform-plugin-framework/provider
+var _ provider.Provider = &GoDaddyDNSProvider{}
 
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
-	// version is set to the provider version on release, "dev" when the
-	// provider is built and ran locally, and "test" when running acceptance
-	// testing.
+type GoDaddyDNSProvider struct {
+	// "dev" for local testing, "test" for acceptance tests, "v1.2.3" for prod
 	version string
+	// api client is stored in ResourceData in Configure
+	// apiClient apiClient
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
-}
-
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "scaffolding"
+func (p *GoDaddyDNSProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	// common prefix for resources
+	resp.TypeName = "godaddy-dns"
+	// set in configure
 	resp.Version = p.version
 }
 
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+// have to match schema
+type GoDaddyDNSProviderModel struct {
+	APIKey    types.String `tfsdk:"api_key"`
+	APISecret types.String `tfsdk:"api_secret"`
+}
+
+func (p *GoDaddyDNSProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
-				Optional:            true,
+			"api_key": schema.StringAttribute{
+				MarkdownDescription: "GoDaddy API key",
+				Required:            false,
+			},
+			"api_secret": schema.StringAttribute{
+				MarkdownDescription: "GoDaddy API secret",
+				Required:            false,
 			},
 		},
+		// also: Blocks
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	var confData GoDaddyDNSProviderModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &confData)...)
+
+	apiKey := os.Getenv("GODADDY_API_KEY")
+	if !confData.APIKey.IsNull() {
+		apiKey = confData.APIKey.ValueString()
+	}
+	if apiKey == "" {
+		resp.Diagnostics.AddError(
+			"Missing API Key Configuration",
+			"While configuring the provider, the API key was not found in "+
+				"the GODADDY_API_KEY environment variable or provider "+
+				"configuration block api_key attribute.",
+		)
+	}
+	apiSecret := os.Getenv("GODADDY_API_SECRET")
+	if !confData.APISecret.IsNull() {
+		apiSecret = confData.APISecret.ValueString()
+	}
+	if apiSecret == "" {
+		resp.Diagnostics.AddError(
+			"Missing API Secret Configuration",
+			"While configuring the provider, the API secret was not found in "+
+				"the GODADDY_API_SECRET environment variable or provider "+
+				"configuration block api_secret attribute.",
+		)
+	}
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
-
-	// Example client configuration for data sources and resources
+	// err := makeClient()
+	// if err != nil {
+	// 	resp.Diagnostics.AddError("failed to create API client", err.Error())
+	// 	return
+	// }
 	client := http.DefaultClient
-	resp.DataSourceData = client
 	resp.ResourceData = client
 }
 
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *GoDaddyDNSProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewExampleResource,
 	}
 }
 
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
-		NewExampleDataSource,
-	}
+func (p *GoDaddyDNSProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{}
 }
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &ScaffoldingProvider{
+		return &GoDaddyDNSProvider{
 			version: version,
 		}
 	}
