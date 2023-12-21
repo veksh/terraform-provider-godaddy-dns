@@ -25,3 +25,24 @@ func (d *emptyDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 
 func (d *emptyDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 }
+
+/*
+// also: configuration
+var _ datasource.DataSourceWithConfigure = &emptyDataSource{}
+
+func (d *emptyDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*http.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	d.client = client
+}
+*/
