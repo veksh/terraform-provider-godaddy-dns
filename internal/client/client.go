@@ -49,7 +49,8 @@ type Client struct {
 func NewClient(apiURL string, key string, secret string) (*Client, error) {
 	// t := http.DefaultTransport.(*http.Transport).Clone()
 	httpTransport := &http.Transport{
-		DialContext:           (&net.Dialer{Timeout: HTTP_TIMEOUT * time.Second}).DialContext,
+		DialContext: (&net.Dialer{
+			Timeout: HTTP_TIMEOUT * time.Second}).DialContext,
 		TLSHandshakeTimeout:   HTTP_TIMEOUT * time.Second,
 		ResponseHeaderTimeout: HTTP_TIMEOUT * time.Second,
 		MaxIdleConns:          10,
@@ -79,7 +80,7 @@ func NewClient(apiURL string, key string, secret string) (*Client, error) {
 // see API docs: https://developer.godaddy.com/doc/endpoint/domains/
 // ok for both Get and Add (patch), Put (replace) is partial
 // first 4 are always present, rest are only for MX (priority) and SRV
-type DNSRecord struct {
+type apiDNSRecord struct {
 	Data     string `json:"data,omitempty"`
 	Name     string `json:"name"`
 	Type     string `json:"type,omitempty"`
@@ -91,7 +92,7 @@ type DNSRecord struct {
 	Weight   uint16 `json:"weight,omitempty"`
 }
 
-type APIErrorResponce struct {
+type apiErrorResponce struct {
 	Error   string `json:"code"`    // like "INVALID_VALUE_ENUM"
 	Message string `json:"message"` // like "type not any of: A, ..."
 }
@@ -119,7 +120,7 @@ func (c Client) makeRecordsRequest(ctx context.Context, path string, method stri
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		var errRes APIErrorResponce
+		var errRes apiErrorResponce
 		if err = json.NewDecoder(resp.Body).Decode(&errRes); err == nil {
 			return nil, errors.New("api error: " + errRes.Message)
 		}
@@ -142,7 +143,7 @@ func (c Client) GetRecords(ctx context.Context, rDomain model.DNSDomain,
 	}
 	defer resp.Body.Close()
 
-	var responceRecords []DNSRecord
+	var responceRecords []apiDNSRecord
 	err = json.NewDecoder(resp.Body).Decode(&responceRecords)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot decode json reply")
@@ -171,9 +172,9 @@ func (c Client) AddRecords(ctx context.Context, rDomain model.DNSDomain,
 
 	rPath, _ := url.JoinPath(string(rDomain), "records")
 
-	recs := make([]DNSRecord, 0, len(records))
+	recs := make([]apiDNSRecord, 0, len(records))
 	for _, mr := range records {
-		rec := DNSRecord{
+		rec := apiDNSRecord{
 			Data: string(mr.Data),
 			Name: string(mr.Name),
 			Type: string(mr.Type),
@@ -223,9 +224,9 @@ func (c Client) SetRecords(ctx context.Context, rDomain model.DNSDomain,
 
 	rPath, _ := url.JoinPath(string(rDomain), "records", string(rType), string(rName))
 
-	recs := make([]DNSRecord, 0, len(records))
+	recs := make([]apiDNSRecord, 0, len(records))
 	for _, mr := range records {
-		rec := DNSRecord{
+		rec := apiDNSRecord{
 			Data: string(mr.Data),
 			TTL:  uint32(mr.TTL),
 		}
