@@ -6,4 +6,9 @@ terraform {
   }
 }
 
-provider "godaddy-dns" {}
+provider "godaddy-dns" {
+  api_key    = "dummy"
+  api_secret = "pseudo"
+}
+
+data "godaddy-dns_empty" "test" {}

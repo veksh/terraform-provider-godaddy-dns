@@ -67,7 +67,7 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 	resp.Diagnostics.Append(req.Config.Get(ctx, &confData)...)
 
 	apiKey := os.Getenv("GODADDY_API_KEY")
-	if !(confData.APIKey.IsUnknown() || !confData.APIKey.IsNull()) {
+	if !(confData.APIKey.IsUnknown() || confData.APIKey.IsNull()) {
 		apiKey = confData.APIKey.ValueString()
 	}
 	if apiKey == "" {
@@ -112,7 +112,9 @@ func (p *GoDaddyDNSProvider) Resources(ctx context.Context) []func() resource.Re
 }
 
 func (p *GoDaddyDNSProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		NewEmptyDataSource,
+	}
 }
 
 func New(version string) func() provider.Provider {
