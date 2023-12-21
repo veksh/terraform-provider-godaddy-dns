@@ -2,10 +2,12 @@
 
 package tools
 
+/*
 import (
 	// Documentation generation
 	_ "github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs"
 )
+*/
 
 // vscode complains that
 //   `import "<...>/tfplugindocs" is a program, not an importable package`
