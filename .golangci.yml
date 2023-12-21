@@ -10,7 +10,7 @@ linters:
     - errcheck
     - exportloopref
     - forcetypeassert
-    - godot
+    # - godot # do not require comments to end in period :)
     - gofmt
     - gosimple
     - ineffassign
