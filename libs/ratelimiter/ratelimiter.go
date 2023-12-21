@@ -9,7 +9,7 @@ import (
 
 // simple token bucket rate limiter
 // - keeps track of available tokens and the last time a token was added
-// - on aquire: if there are tokens available, spend one and return immediately
+// - on acquire: if there are tokens available, spend one and return immediately
 // - if there are none
 //   - check the time since a token was added, mb add some more
 //   - spend one if now it is available
