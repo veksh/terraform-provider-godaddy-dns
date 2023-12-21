@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -47,10 +48,12 @@ func (p *GoDaddyDNSProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "GoDaddy API key",
 				Optional:            true,
+				Sensitive:           true,
 			},
 			"api_secret": schema.StringAttribute{
 				MarkdownDescription: "GoDaddy API secret",
 				Optional:            true,
+				Sensitive:           true,
 			},
 		},
 		// also: Blocks
@@ -64,11 +67,12 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 	resp.Diagnostics.Append(req.Config.Get(ctx, &confData)...)
 
 	apiKey := os.Getenv("GODADDY_API_KEY")
-	if !confData.APIKey.IsNull() {
+	if !(confData.APIKey.IsUnknown() || !confData.APIKey.IsNull()) {
 		apiKey = confData.APIKey.ValueString()
 	}
 	if apiKey == "" {
-		resp.Diagnostics.AddError(
+		// be more specific than resp.Diagnostics.AddError(...)
+		resp.Diagnostics.AddAttributeError(path.Root("api_key"),
 			"Missing API Key Configuration",
 			"While configuring the provider, the API key was not found in "+
 				"the GODADDY_API_KEY environment variable or provider "+
@@ -76,11 +80,11 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 		)
 	}
 	apiSecret := os.Getenv("GODADDY_API_SECRET")
-	if !confData.APISecret.IsNull() {
+	if !(confData.APISecret.IsUnknown() || confData.APISecret.IsNull()) {
 		apiSecret = confData.APISecret.ValueString()
 	}
 	if apiSecret == "" {
-		resp.Diagnostics.AddError(
+		resp.Diagnostics.AddAttributeError(path.Root("api_secret"),
 			"Missing API Secret Configuration",
 			"While configuring the provider, the API secret was not found in "+
 				"the GODADDY_API_SECRET environment variable or provider "+
