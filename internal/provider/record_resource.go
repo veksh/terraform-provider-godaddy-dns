@@ -3,21 +3,25 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &RecordResource{}
-var _ resource.ResourceWithImportState = &RecordResource{}
+var (
+	_ resource.Resource              = &RecordResource{}
+	_ resource.ResourceWithConfigure = &RecordResource{}
+)
+
+// var _ resource.ResourceWithImportState = &RecordResource{}
 
 func NewRecordResource() resource.Resource {
 	return &RecordResource{}
@@ -25,7 +29,7 @@ func NewRecordResource() resource.Resource {
 
 // RecordResource defines the resource implementation.
 type RecordResource struct {
-	client *http.Client
+	client *client.Client
 }
 
 // ExampleResourceModel describes the resource data model.
@@ -36,50 +40,68 @@ type ExampleResourceModel struct {
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_example"
+	resp.TypeName = req.ProviderTypeName + "_record"
 }
 
 func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		// This description is used by the documentation generator and the language server.
-		MarkdownDescription: "Example resource",
-
+		MarkdownDescription: "GoDaddy DNS record",
 		Attributes: map[string]schema.Attribute{
-			"configurable_attribute": schema.StringAttribute{
-				MarkdownDescription: "Example configurable attribute",
-				Optional:            true,
+			"domain": schema.StringAttribute{
+				MarkdownDescription: "managed domain (top-level)",
+				Required:            true,
 			},
-			"defaulted": schema.StringAttribute{
-				MarkdownDescription: "Example configurable attribute with default value",
-				Optional:            true,
-				Computed:            true,
-				Default:             stringdefault.StaticString("example value when not configured"),
-			},
-			"id": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "Example identifier",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+			"type": schema.StringAttribute{
+				MarkdownDescription: "type: A, CNAME etc",
+				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "SOA", "SRV", "TXT"}...),
 				},
 			},
+			"name": schema.StringAttribute{
+				MarkdownDescription: "name (part of fqdn), may include `.` for sub-domains",
+				Required:            true,
+			},
+			"data": schema.StringAttribute{
+				MarkdownDescription: "contents: target for CNAME, ip address for A etc",
+				Required:            true,
+			},
+			"ttl": schema.Int64Attribute{
+				MarkdownDescription: "TTL, > 600 < 86400, def 3600",
+				Required:            false,
+				Default:             int64default.StaticInt64(3600),
+			},
+			/*
+				"defaulted": schema.StringAttribute{
+					MarkdownDescription: "Example configurable attribute with default value",
+					Optional:            true,
+					Computed:            true,
+					Default:             stringdefault.StaticString("example value when not configured"),
+				},
+				"id": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Example identifier",
+					PlanModifiers: []planmodifier.String{
+						stringplanmodifier.UseStateForUnknown(),
+					},
+				},
+			*/
 		},
 	}
 }
 
 func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
+	// or it will panic on none
 	if req.ProviderData == nil {
 		return
 	}
 
-	client, ok := req.ProviderData.(*http.Client)
-
+	client, ok := req.ProviderData.(*client.Client)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *http.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
-
 		return
 	}
 

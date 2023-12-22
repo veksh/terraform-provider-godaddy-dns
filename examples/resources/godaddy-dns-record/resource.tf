@@ -1,4 +1,4 @@
-resource "godaddy_dns_record" "cname" {
+resource "godaddy-dns_record" "cname" {
   domain = "mydomain.com"
 
   type = "CNAME"
