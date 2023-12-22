@@ -10,9 +10,9 @@ or complain if expecting to manage it fully).
 - [x] provider
 - [x] resource: basic types
 - [x] check basic working on real dns
-- [ ] further checks
-  - [ ] pre-existing records: before first apply; import?
-  - [ ] conf drift: external modification
+- [x] further checks
+  - [x] pre-existing records: ok after import
+  - [x] conf drift: ok refreshed on plan/apply
 - [ ] add more record types; test txt/mx updates
 - [ ] mb some unit tests
 - [ ] mb some integration tests; cleanup

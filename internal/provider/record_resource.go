@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -18,11 +19,10 @@ import (
 
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
-	_ resource.Resource              = &RecordResource{}
-	_ resource.ResourceWithConfigure = &RecordResource{}
+	_ resource.Resource                = &RecordResource{}
+	_ resource.ResourceWithConfigure   = &RecordResource{}
+	_ resource.ResourceWithImportState = &RecordResource{}
 )
-
-// var _ resource.ResourceWithImportState = &RecordResource{}
 
 type tfDNSRecord struct {
 	Domain types.String `tfsdk:"domain"`
@@ -137,7 +137,9 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 		TTL:  model.DNSRecordTTL(planData.TTL.ValueInt64()),
 	}
 	apiDomain := model.DNSDomain(planData.Domain.ValueString())
-	// add: will fail on uniquesness violation; mb check if it exists
+	// add: does not check (read) if creating w/o prior state
+	// and so will fail on uniquesness violation (e.g. if CNAME already
+	// exists, even with the same name)
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRec})
 
 	if err != nil {
@@ -262,6 +264,27 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	tflog.Info(ctx, "DNS record deleted")
 }
 
+// terraform import godaddy-dns_record.new-cname domain:CNAME:_test:testing.com
 func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// resource.ImportStatePassthroughID(ctx, path.Root("data"), req, resp)
+
+	// for some reason Terraform does not pass schema data to Read on import
+	// either as a separate structure in ReadRequest or as defaults: if only
+	// they were accessible, it would elimiate the need to pass anything here
+
+	idParts := strings.Split(req.ID, ":")
+
+	// mb check format and emptiness
+	if len(idParts) != 4 {
+		resp.Diagnostics.AddError(
+			"Unexpected Import Identifier",
+			fmt.Sprintf("Expected import identifier with format: domain:TYPE:name:data like mydom.com:CNAME:redir:www.other.com. Got: %q", req.ID),
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain"), idParts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("type"), idParts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), idParts[2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("data"), idParts[3])...)
 }
