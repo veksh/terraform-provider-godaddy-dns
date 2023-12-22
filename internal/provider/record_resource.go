@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
@@ -23,6 +24,14 @@ var (
 
 // var _ resource.ResourceWithImportState = &RecordResource{}
 
+type tfDNSRecord struct {
+	Domain types.String `tfsdk:"domain"`
+	Type   types.String `tfsdk:"type"`
+	Name   types.String `tfsdk:"name"`
+	Data   types.String `tfsdk:"data"`
+	TTL    types.Int64  `tfsdk:"ttl"`
+}
+
 func NewRecordResource() resource.Resource {
 	return &RecordResource{}
 }
@@ -30,13 +39,6 @@ func NewRecordResource() resource.Resource {
 // RecordResource defines the resource implementation.
 type RecordResource struct {
 	client *client.Client
-}
-
-// ExampleResourceModel describes the resource data model.
-type ExampleResourceModel struct {
-	ConfigurableAttribute types.String `tfsdk:"configurable_attribute"`
-	Defaulted             types.String `tfsdk:"defaulted"`
-	Id                    types.String `tfsdk:"id"`
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -90,6 +92,13 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 	}
 }
 
+func setLogCtx(ctx context.Context, tfRec tfDNSRecord) context.Context {
+	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
+	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
+	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
+	return ctx
+}
+
 func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// or it will panic on none
 	if req.ProviderData == nil {
@@ -109,96 +118,153 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 }
 
 func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ExampleResourceModel
+	var planData tfDNSRecord
 
 	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create example, got error: %s", err))
-	//     return
-	// }
+	ctx = setLogCtx(ctx, planData)
 
-	// For the purposes of this example code, hardcoding a response value to
-	// save into the Terraform state.
-	data.Id = types.StringValue("example-id")
+	apiRec := model.DNSRecord{
+		Name: model.DNSRecordName(planData.Name.ValueString()),
+		Type: model.DNSRecordType(planData.Type.ValueString()),
+		Data: model.DNSRecordData(planData.Data.ValueString()),
+		TTL:  model.DNSRecordTTL(planData.TTL.ValueInt64()),
+	}
+	apiDomain := model.DNSDomain(planData.Domain.ValueString())
+	// add: will fail on uniquesness violation
+	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRec})
 
-	// Write logs using the tflog package
-	// Documentation: https://terraform.io/plugin/log
-	tflog.Trace(ctx, "created a resource")
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error",
+			fmt.Sprintf("Unable to create record: %s", err))
+		return
+	}
 
-	// Save data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	tflog.Info(ctx, "DNS record created")
+	// 	map[string]any{
+	// 		"domain": planData.Domain.ValueString(),
+	// 		"name":   planData.Name.ValueString(),
+	// 		"type":   planData.Type.ValueString()},
+	// )
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
 
 func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ExampleResourceModel
+	var priorData tfDNSRecord
 
 	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(req.State.Get(ctx, &priorData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read example, got error: %s", err))
-	//     return
-	// }
+	ctx = setLogCtx(ctx, priorData)
 
+	apiDomain := model.DNSDomain(priorData.Domain.ValueString())
+	apiRecType := model.DNSRecordType(priorData.Type.ValueString())
+	apiRecName := model.DNSRecordName(priorData.Name.ValueString())
+
+	apiRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecType, apiRecName)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error",
+			fmt.Sprintf("Reading DNS records: query failed: %s", err))
+		return
+	}
+	if numRecs := len(apiRecs); numRecs == 0 {
+		tflog.Trace(ctx, "Reading DNS record: currently absent")
+		// no resource found: mb ok or need to re-create
+		resp.State.RemoveResource(ctx)
+		return
+	} else {
+		tflog.Trace(ctx, fmt.Sprintf(
+			"Reading DNS record: found %d matching records", numRecs))
+		// meaning of "match" is different between types
+		//  - for A, AAAA, and CNAME (and SOA), there could be only 1 records
+		//    with a given name in domain
+		//  - for TXT there could be several, have to match by name
+		//  - for MX there could be several, have to match by name
+		//    - they could have different priorities; in theory, MX 0 and MX 10
+		//      could point to the same "name", but lets think that it is a
+		//      preversion :)
+		//  - for SRV there could several records with the same fields and
+		//    different names for e.g. load balancing
+		for _, rec := range apiRecs {
+			tflog.Trace(ctx, fmt.Sprintf(
+				"Reading DNS record: data %s, prio %d, ttl %d",
+				rec.Data, rec.Priority, rec.TTL))
+			if rec.Type == "A" || rec.Type == "CNAME" || rec.Type == "AAAA" {
+				// TODO: ok to always update? or need to check for match?
+				priorData.Data = types.StringValue(string(rec.Data))
+				priorData.TTL = types.Int64Value(int64(rec.TTL))
+			}
+			// will deal with more complex types later :)
+		}
+	}
 	// Save updated data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &priorData)...)
 }
 
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ExampleResourceModel
+	var planData tfDNSRecord
 
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update example, got error: %s", err))
-	//     return
-	// }
+	ctx = setLogCtx(ctx, planData)
 
-	// Save updated data into Terraform state
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	apiRec := model.DNSRecord{
+		Data: model.DNSRecordData(planData.Data.ValueString()),
+		TTL:  model.DNSRecordTTL(planData.TTL.ValueInt64()),
+	}
+	apiDomain := model.DNSDomain(planData.Domain.ValueString())
+	apiName := model.DNSRecordName(planData.Name.ValueString())
+	apiType := model.DNSRecordType(planData.Type.ValueString())
+
+	// simple case of A/CNAME: only one record, so it is safe to replace
+	// TODO: implement read + modify + write for TXT etc
+	err := r.client.SetRecords(ctx, apiDomain, apiType, apiName, []model.DNSRecord{apiRec})
+
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error",
+			fmt.Sprintf("Updating DNS record: query failed: %s", err))
+		return
+	}
+
+	tflog.Info(ctx, "DNS record updated")
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
 
 func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ExampleResourceModel
+	var priorData tfDNSRecord
 
-	// Read Terraform prior state data into the model
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-
+	resp.Diagnostics.Append(req.State.Get(ctx, &priorData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// If applicable, this is a great opportunity to initialize any necessary
-	// provider client data and make a call using it.
-	// httpResp, err := r.client.Do(httpReq)
-	// if err != nil {
-	//     resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete example, got error: %s", err))
-	//     return
-	// }
+	ctx = setLogCtx(ctx, priorData)
+
+	apiDomain := model.DNSDomain(priorData.Domain.ValueString())
+	apiName := model.DNSRecordName(priorData.Name.ValueString())
+	apiType := model.DNSRecordType(priorData.Type.ValueString())
+
+	err := r.client.DelRecords(ctx, apiDomain, apiType, apiName)
+
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error",
+			fmt.Sprintf("Deleting DNS record: query failed: %s", err))
+		return
+	}
+
+	tflog.Info(ctx, "DNS record deleted")
 }
 
 func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
