@@ -93,10 +93,13 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 	}
 }
 
+// add record fields to context; export TF_LOG=debug to view
 func setLogCtx(ctx context.Context, tfRec tfDNSRecord) context.Context {
 	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
 	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
 	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
+	// so could search for logtype=custom in logs
+	ctx = tflog.SetField(ctx, "logtype", "custom")
 	return ctx
 }
 
