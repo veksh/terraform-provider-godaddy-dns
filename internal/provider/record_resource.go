@@ -71,6 +71,7 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"ttl": schema.Int64Attribute{
 				MarkdownDescription: "TTL, > 600 < 86400, def 3600",
 				Required:            false,
+				Computed:            true, // must be computed to use a default
 				Default:             int64default.StaticInt64(3600),
 			},
 			/*
@@ -176,12 +177,12 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 	if numRecs := len(apiRecs); numRecs == 0 {
-		tflog.Trace(ctx, "Reading DNS record: currently absent")
+		tflog.Debug(ctx, "Reading DNS record: currently absent")
 		// no resource found: mb ok or need to re-create
 		resp.State.RemoveResource(ctx)
 		return
 	} else {
-		tflog.Trace(ctx, fmt.Sprintf(
+		tflog.Debug(ctx, fmt.Sprintf(
 			"Reading DNS record: found %d matching records", numRecs))
 		// meaning of "match" is different between types
 		//  - for A, AAAA, and CNAME (and SOA), there could be only 1 records
@@ -194,7 +195,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//  - for SRV there could several records with the same fields and
 		//    different names for e.g. load balancing
 		for _, rec := range apiRecs {
-			tflog.Trace(ctx, fmt.Sprintf(
+			tflog.Debug(ctx, fmt.Sprintf(
 				"Reading DNS record: data %s, prio %d, ttl %d",
 				rec.Data, rec.Priority, rec.TTL))
 			if rec.Type == "A" || rec.Type == "CNAME" || rec.Type == "AAAA" {
