@@ -123,8 +123,6 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 
 func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var planData tfDNSRecord
-
-	// Read Terraform plan data into the model
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -139,7 +137,7 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 		TTL:  model.DNSRecordTTL(planData.TTL.ValueInt64()),
 	}
 	apiDomain := model.DNSDomain(planData.Domain.ValueString())
-	// add: will fail on uniquesness violation
+	// add: will fail on uniquesness violation; mb check if it exists
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRec})
 
 	if err != nil {
@@ -149,19 +147,13 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	tflog.Info(ctx, "DNS record created")
-	// 	map[string]any{
-	// 		"domain": planData.Domain.ValueString(),
-	// 		"name":   planData.Name.ValueString(),
-	// 		"type":   planData.Type.ValueString()},
-	// )
+	// 	map[string]any{"domain": planData.Domain.ValueString(),}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
 
 func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var priorData tfDNSRecord
-
-	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &priorData)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -215,7 +207,6 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planData tfDNSRecord
-
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
 	if resp.Diagnostics.HasError() {
 		return
