@@ -44,6 +44,9 @@ type GoDaddyDNSProviderModel struct {
 
 func (p *GoDaddyDNSProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		// full documentation: conf in templates
+		// see https://github.com/hashicorp/terraform-provider-tls/blob/main/templates/index.md.tmpl
+		MarkdownDescription: "GoDaddy DNS provider",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "GoDaddy API key",

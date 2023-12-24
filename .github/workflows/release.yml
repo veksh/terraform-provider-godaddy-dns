@@ -6,6 +6,7 @@ on:
       - 'v*'
 # # alt for manually triggered release: changelog etc
 # # https://github.com/hashicorp/terraform-provider-random/blob/main/.github/workflows/release.yml
+# # https://github.com/hashicorp/terraform-provider-tls/blob/main/.github/workflows/release.yml
 #   workflow_dispatch:
 #     inputs:
 #       versionNumber:
