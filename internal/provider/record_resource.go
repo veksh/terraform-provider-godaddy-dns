@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -52,6 +54,9 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"domain": schema.StringAttribute{
 				MarkdownDescription: "managed domain (top-level)",
 				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"type": schema.StringAttribute{
 				MarkdownDescription: "type: A, CNAME etc",
@@ -59,10 +64,16 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Validators: []validator.String{
 					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "SOA", "SRV", "TXT"}...),
 				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"name": schema.StringAttribute{
 				MarkdownDescription: "name (part of fqdn), may include `.` for sub-domains",
 				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"data": schema.StringAttribute{
 				MarkdownDescription: "contents: target for CNAME, ip address for A etc",
@@ -138,7 +149,7 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	apiDomain := model.DNSDomain(planData.Domain.ValueString())
 	// add: does not check (read) if creating w/o prior state
-	// and so will fail on uniquesness violation (e.g. if CNAME already
+	// and so will fail on uniqueness violation (e.g. if CNAME already
 	// exists, even with the same name)
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRec})
 
@@ -270,7 +281,7 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 
 	// for some reason Terraform does not pass schema data to Read on import
 	// either as a separate structure in ReadRequest or as defaults: if only
-	// they were accessible, it would elimiate the need to pass anything here
+	// they were accessible, it would eliminate the need to pass anything here
 
 	idParts := strings.Split(req.ID, ":")
 
