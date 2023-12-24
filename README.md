@@ -14,7 +14,11 @@ or complain if expecting to manage it fully).
   - [x] pre-existing records: ok after import
   - [x] conf drift: ok refreshed on plan/apply
 - [ ] add more record types; test txt/mx updates
-- [ ] mb some unit tests; mock provider api?
+- [ ] addn some unit tests
+  - [ ] mock client: pass client factory as a param, create mocks in test
+  - alt 1: mock server: pass client url for a test server on localhost
+    - really an integration test: testing http client + server
+  - alt 2: intercep and mock (gock): also testing http client
 - [ ] mb some integration tests; cleanup
 - [ ] check github actions
   - [x] PR: fix lint vs docs generation
