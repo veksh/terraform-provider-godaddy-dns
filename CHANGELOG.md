@@ -6,4 +6,3 @@
 - import functionality
 - requests rate limit
 - plans for next version: advanced record types, tests, CI
-

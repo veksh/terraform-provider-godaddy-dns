@@ -24,4 +24,5 @@ provider "godaddy-dns" {
 
 ### Optional
 
-- `endpoint` (String) Example provider attribute
+- `api_key` (String, Sensitive) GoDaddy API key
+- `api_secret` (String, Sensitive) GoDaddy API secret

@@ -20,13 +20,13 @@ build:
 	go build -o bin/$(BINARY) -ldflags='-s -w -X main.version=$(VERSION)' .
 
 test:
-	go test ./...
-
-docs:
-	go generate ./...
+	go test -v -timeout=120s -parallel=4 ./...
 
 testacc:
-	TF_ACC=1 go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 go test -v -timeout 10m ./...
+
+docs:
+	cd tools; go generate ./...
 
 local: build
 	go build -o $(BINARY) -ldflags='-s -w -X main.version=$(VERSION)' .

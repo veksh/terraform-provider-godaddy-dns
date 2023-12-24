@@ -1,8 +1,5 @@
-# Terraform Provider testing workflow.
 name: Tests
 
-# This GitHub action runs your tests for each pull request and push.
-# Optionally, you can turn it on using a schedule for regular testing.
 on:
   pull_request:
     paths-ignore:
@@ -42,7 +39,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
-      - run: go generate ./...
+      - run: cd tools; go generate ./...
       - name: git diff
         run: |
           git diff --compact-summary --exit-code || \
@@ -59,9 +56,12 @@ jobs:
       matrix:
         # list whatever Terraform versions here you would like to support
         terraform:
-          - '1.4.*'
           - '1.5.*'
           - '1.6.*'
+        # os:
+        #   - macos-latest
+        #   - windows-latest
+        #   - ubuntu-latest
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
