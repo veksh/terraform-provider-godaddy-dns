@@ -112,10 +112,10 @@ func (p *GoDaddyDNSProvider) Resources(ctx context.Context) []func() resource.Re
 }
 
 func (p *GoDaddyDNSProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	// return nil
-	return []func() datasource.DataSource{
-		NewEmptyDataSource,
-	}
+	return nil
+	// return []func() datasource.DataSource{
+	// 	NewEmptyDataSource,
+	// }
 }
 
 func New(version string) func() provider.Provider {
