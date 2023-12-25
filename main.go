@@ -9,7 +9,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
-	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/provider"
 )
 
@@ -31,7 +30,7 @@ func main() {
 		Debug:   debug,
 	}
 
-	apiClientFactory := func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+	apiClientFactory := func(apiURL, apiKey, apiSecret string) (client.DNSApiClient, error) {
 		return client.NewClient(apiURL, apiKey, apiSecret)
 	}
 

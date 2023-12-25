@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 )
 
 // testing api at ote is useless
@@ -22,7 +22,7 @@ const GODADDY_API_URL = "https://api.godaddy.com"
 // https://pkg.go.dev/github.com/hashicorp/terraform-plugin-framework/provider
 var _ provider.Provider = &GoDaddyDNSProvider{}
 
-type APIClientFactory func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error)
+type APIClientFactory func(apiURL, apiKey, apiSecret string) (client.DNSApiClient, error)
 
 type GoDaddyDNSProvider struct {
 	// "dev" for local testing, "test" for acceptance tests, "v1.2.3" for prod

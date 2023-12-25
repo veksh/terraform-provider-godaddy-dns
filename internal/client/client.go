@@ -16,10 +16,19 @@ import (
 	"github.com/veksh/terraform-provider-godaddy-dns/libs/ratelimiter"
 )
 
-// also: https://github.com/go-resty/resty
+// see also: https://github.com/go-resty/resty
 
 // to view actual records
-// curlie -v GET "https://api.godaddy.com/v1/domains/veksh.in/records" -H "Authorization: sso-key $GODADDY_API_KEY:$GODADDY_API_SECRET"
+// curlie -v GET "https://api.godaddy.com/v1/domains/<domain>/records" -H "Authorization: sso-key $GODADDY_API_KEY:$GODADDY_API_SECRET"
+
+var _ DNSApiClient = Client{}
+
+type DNSApiClient interface {
+	AddRecords(ctx context.Context, domain model.DNSDomain, records []model.DNSRecord) error
+	GetRecords(ctx context.Context, domain model.DNSDomain, rType model.DNSRecordType, rName model.DNSRecordName) ([]model.DNSRecord, error)
+	SetRecords(ctx context.Context, domain model.DNSDomain, rType model.DNSRecordType, rName model.DNSRecordName, records []model.DNSRecord) error
+	DelRecords(ctx context.Context, domain model.DNSDomain, rType model.DNSRecordType, rName model.DNSRecordName) error
+}
 
 const (
 	HTTP_TIMEOUT = 10

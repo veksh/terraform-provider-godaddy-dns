@@ -10,7 +10,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
-	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
 // testAccProtoV6ProviderFactories are used to instantiate a provider during
@@ -21,7 +20,7 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 	// pass test to the constructor
 	"godaddy-dns": providerserver.NewProtocol6WithError(New(
 		"test",
-		func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+		func(apiURL, apiKey, apiSecret string) (client.DNSApiClient, error) {
 			return client.NewClient(apiURL, apiKey, apiSecret)
 		})()),
 }

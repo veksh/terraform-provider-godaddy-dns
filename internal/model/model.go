@@ -1,7 +1,5 @@
 package model
 
-import "context"
-
 type DNSDomain string
 
 type DNSRecordType string
@@ -36,12 +34,4 @@ type DNSRecord struct {
 	Protocol DNSRecordSRVProto   // SRV: _tcp or _udp
 	Service  DNSRecordSRVService // SRV: like _ldap
 	Port     DNSRecordSRVPort    // SRV, 1-65535
-}
-
-// client
-type DNSApiClient interface {
-	AddRecords(ctx context.Context, domain DNSDomain, records []DNSRecord) error
-	GetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName) ([]DNSRecord, error)
-	SetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSRecord) error
-	DelRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName) error
 }
