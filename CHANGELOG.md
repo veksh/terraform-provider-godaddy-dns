@@ -5,4 +5,5 @@
 - basic provider and DNS record for simple cases of A/CNAME
 - import functionality
 - requests rate limit
-- plans for next version: advanced record types, tests, CI
+- some acceptance tests
+- plans for next version: advanced record types, unit tests, publish
