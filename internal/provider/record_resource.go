@@ -87,7 +87,7 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Default:             int64default.StaticInt64(3600),
 			},
 			"id": schema.StringAttribute{
-				MarkdownDescription: "Artifical ID attribute for RR (domain:name:type:data), " +
+				MarkdownDescription: "Artificial ID attribute for RR (domain:name:type:data), " +
 					"used internally by Terraform and should not be used in configuration",
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
