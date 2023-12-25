@@ -1,3 +1,5 @@
+//go:generate mockery --all
+
 package model
 
 import "context"

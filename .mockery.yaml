@@ -1,0 +1,14 @@
+with-expecter: true
+packages:
+  github.com/veksh/terraform-provider-godaddy-dns/internal/model:
+    # place your package-specific config here
+    config:
+      filename: "mock_{{.InterfaceName}}.go"
+      dir: "{{.InterfaceDir}}"
+      mockname: "Mock{{.InterfaceName}}"
+      outpkg: "{{.PackageName}}"
+      inpackage: True
+    interfaces:
+      DNSApiClient:
+        config:
+          filename: "mock_apiclient.go"
