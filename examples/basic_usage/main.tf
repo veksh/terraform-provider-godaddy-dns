@@ -15,5 +15,5 @@ resource "godaddy-dns_record" "new-cname" {
   domain = "veksh.in"
   type   = "CNAME"
   name   = "_test-cn"
-  data   = "testing.com"
+  data   = "test.com"
 }
