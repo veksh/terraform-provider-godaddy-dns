@@ -3,12 +3,12 @@
 page_title: "godaddy-dns Provider"
 subcategory: ""
 description: |-
-  
+  GoDaddy DNS provider
 ---
 
 # godaddy-dns Provider
 
-
+GoDaddy DNS provider
 
 ## Example Usage
 
