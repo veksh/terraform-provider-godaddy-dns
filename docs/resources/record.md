@@ -34,5 +34,4 @@ resource "godaddy-dns_record" "cname" {
 
 ### Read-Only
 
-- `id` (String) Artificial ID attribute for RR (domain:name:type:data), used internally by Terraform and should not be used in configuration
 - `ttl` (Number) TTL, > 600 < 86400, def 3600
