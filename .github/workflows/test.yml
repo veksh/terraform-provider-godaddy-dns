@@ -61,7 +61,9 @@ jobs:
       matrix:
         # list whatever Terraform versions here you would like to support
         terraform:
-          - '1.5.*'
+          # test only one for now: concurrent tests fight for the same resource
+          # mb will find a way to make names unique later
+          # - '1.5.*'
           - '1.6.*'
         # os:
         #   - macos-latest
