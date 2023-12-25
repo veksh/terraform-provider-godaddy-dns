@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # for acceptance tests on real infra
+  GODADDY_API_KEY: ${{ secrets.GODADDY_API_KEY }}
+  GODADDY_API_SECRET: ${{ secrets.GODADDY_API_SECRET }}
+
 jobs:
   # Ensure project builds before running testing matrix
   build:
