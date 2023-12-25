@@ -32,7 +32,6 @@ type tfDNSRecord struct {
 	Name   types.String `tfsdk:"name"`
 	Data   types.String `tfsdk:"data"`
 	TTL    types.Int64  `tfsdk:"ttl"`
-	ID     types.String `tfsdk:"id"`
 }
 
 func NewRecordResource() resource.Resource {
@@ -86,14 +85,6 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Computed:            true, // must be computed to use a default
 				Default:             int64default.StaticInt64(3600),
 			},
-			"id": schema.StringAttribute{
-				MarkdownDescription: "Artificial ID attribute for RR (domain:name:type:data), " +
-					"used internally by Terraform and should not be used in configuration",
-				Computed: true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
 			/*
 				"defaulted": schema.StringAttribute{
 					MarkdownDescription: "Example configurable attribute with default value",
@@ -121,14 +112,6 @@ func setLogCtx(ctx context.Context, tfRec tfDNSRecord) context.Context {
 	// so could search for logtype=custom in logs
 	ctx = tflog.SetField(ctx, "logtype", "custom")
 	return ctx
-}
-
-func makeID(tfRec tfDNSRecord) string {
-	return fmt.Sprintf("%s:%s:%s:%s",
-		tfRec.Domain.ValueString(),
-		tfRec.Type.ValueString(),
-		tfRec.Name.ValueString(),
-		tfRec.Data.ValueString())
 }
 
 func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -177,8 +160,6 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	tflog.Info(ctx, "DNS record created")
-	// 	map[string]any{"domain": planData.Domain.ValueString(),}
-	planData.ID = types.StringValue(makeID(planData))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
@@ -228,7 +209,6 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 				// TODO: ok to always update? or need to check for match?
 				priorData.Data = types.StringValue(string(rec.Data))
 				priorData.TTL = types.Int64Value(int64(rec.TTL))
-				priorData.ID = types.StringValue(makeID(priorData))
 			}
 			// will deal with more complex types later :)
 		}
@@ -317,5 +297,4 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("type"), idParts[1])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), idParts[2])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("data"), idParts[3])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 }
