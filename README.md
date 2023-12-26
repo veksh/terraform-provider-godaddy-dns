@@ -17,8 +17,8 @@ or complain if expecting to manage it fully).
 - [x] check github actions
   - [x] PR: fix lint vs docs generation
   - [x] merge: check that release is built ok
-- [ ] add some unit tests
-  - [ ] mock client: pass client factory as a param, create mocks in test
+- [x] add some unit tests
+  - [x] mock client: pass client factory as a param, create mocks in test
   - alt 1: mock server: pass client url for a test server on localhost
   - alt 2: intercept and mock (gock): also testing http client
   - these really are integration tests: testing http client with mock server
