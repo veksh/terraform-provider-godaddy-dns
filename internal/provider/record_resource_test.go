@@ -33,20 +33,18 @@ func TestUnitCnameResource(t *testing.T) {
 		TTL:  3600,
 	}
 	mockClient.EXPECT().AddRecords(
-		mock.Anything,
-		// mock.AnythingOfType("*context.emptyCtx"),
+		mock.AnythingOfType("*context.valueCtx"),
 		model.DNSDomain("veksh.in"),
 		[]model.DNSRecord{rec},
 	).Return(nil).Once()
 	mockClient.EXPECT().GetRecords(
-		// mock.AnythingOfType("*context.emptyCtx"),
-		mock.Anything,
+		mock.AnythingOfType("*context.valueCtx"),
 		model.DNSDomain("veksh.in"),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{rec}, nil)
 	mockClient.EXPECT().DelRecords(
-		mock.Anything,
+		mock.AnythingOfType("*context.valueCtx"),
 		model.DNSDomain("veksh.in"),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
