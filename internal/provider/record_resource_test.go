@@ -20,6 +20,7 @@ const ACC_TEST_DOM = "veksh.in"
 // go test -count=1 -run='TestUnitCnameResource' -v ./internal/provider/
 func TestUnitCnameResource(t *testing.T) {
 	// add record, read it back
+	// also: calls DelRecord if step fails, mb add it + make optional
 	mockClientAdd := model.NewMockDNSApiClient(t)
 	recAdd := model.DNSRecord{
 		Name: "_test-cn._testacc",
@@ -67,6 +68,29 @@ func TestUnitCnameResource(t *testing.T) {
 			"test",
 			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
 				return model.DNSApiClient(mockClientImp), nil
+			})()),
+	}
+
+	// read recod, expect mismatch with saved state
+	mockClientRef := model.NewMockDNSApiClient(t)
+	recRef := model.DNSRecord{
+		Name: "_test-cn._testacc",
+		Type: "CNAME",
+		Data: "test-upd.com",
+		TTL:  3600,
+	}
+	mockClientRef.EXPECT().GetRecords(
+		mock.AnythingOfType("*context.valueCtx"),
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+	).Return([]model.DNSRecord{recRef}, nil)
+	testProviderFactoryRef := map[string]func() (tfprotov6.ProviderServer, error){
+		// pass test to the constructor
+		"godaddy-dns": providerserver.NewProtocol6WithError(New(
+			"test",
+			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+				return model.DNSApiClient(mockClientRef), nil
 			})()),
 	}
 
@@ -147,7 +171,7 @@ func TestUnitCnameResource(t *testing.T) {
 						"testing.com"),
 				),
 			},
-			// read and update state
+			// read, compare with saved, should produce no plan
 			{
 				ProtoV6ProviderFactories: testProviderFactoryImp,
 				ResourceName:             "godaddy-dns_record.test-cname",
@@ -162,6 +186,13 @@ func TestUnitCnameResource(t *testing.T) {
 						attrs["data"]), nil
 				},
 				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			// read, compare with saved, should produce update plan
+			{
+				ProtoV6ProviderFactories: testProviderFactoryRef,
+				ResourceName:             "godaddy-dns_record.test-cname",
+				RefreshState:             true,
+				ExpectNonEmptyPlan:       true,
 			},
 			// update, read back
 			{
