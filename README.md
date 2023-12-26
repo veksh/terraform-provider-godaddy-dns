@@ -22,7 +22,7 @@ or complain if expecting to manage it fully).
   - alt 1: mock server: pass client url for a test server on localhost
   - alt 2: intercept and mock (gock): also testing http client
   - these really are integration tests: testing http client with mock server
-- [ ] add true API checks to integration tests
+- [x] add true API checks to integration tests
 - [ ] add more record types; test txt/mx updates
 - [ ] provide documentation
 - [ ] publish, test getting it from TF

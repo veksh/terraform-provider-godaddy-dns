@@ -5,14 +5,18 @@ package provider
 // go test -timeout 5s -run='TestUnitCnameResource' -v ./internal/provider/
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
@@ -182,9 +186,13 @@ func TestUnitCnameResource(t *testing.T) {
 
 // TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
 func TestAccCnameResource(t *testing.T) {
-	// todo
-	// - CheckDestroy
-	// - real API checks
+
+	apiClient, err := client.NewClient(
+		GODADDY_API_URL,
+		os.Getenv("GODADDY_API_KEY"),
+		os.Getenv("GODADDY_API_SECRET"))
+	assert.Nil(t, err, "cannot create client")
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -207,13 +215,28 @@ func TestAccCnameResource(t *testing.T) {
 						"godaddy-dns_record.test-cname",
 						"data",
 						"testing.com"),
-					// func(*terraform.State) error {
-					// 	if false {
-					// 		t.Errorf("*** that was unexpected")
-					// 		return fmt.Errorf("!!! try to fail it")
-					// 	}
-					// 	return nil
-					// },
+					func(s *terraform.State) error {
+						attrs := s.Modules[0].Resources["godaddy-dns_record.test-cname"].Primary.Attributes
+
+						apiRecs, err := apiClient.GetRecords(
+							context.Background(),
+							model.DNSDomain(attrs["domain"]),
+							model.DNSRecordType(attrs["type"]),
+							model.DNSRecordName(attrs["name"]))
+						if err != nil {
+							t.Error("cannot get record back: client error", err)
+							return err
+						}
+						if len(apiRecs) != 1 {
+							t.Error("cannot get record back: wrong number of results", err)
+							return fmt.Errorf("api check: wrong number of results")
+						}
+						if string(apiRecs[0].Data) != attrs["data"] {
+							t.Error("wrong data attr on record", err)
+							return fmt.Errorf("wrong record found")
+						}
+						return nil
+					},
 				),
 			},
 			// import state
