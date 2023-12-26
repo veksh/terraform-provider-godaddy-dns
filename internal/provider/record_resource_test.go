@@ -33,16 +33,24 @@ func TestUnitCnameResource(t *testing.T) {
 		TTL:  3600,
 	}
 	mockClient.EXPECT().AddRecords(
-		mock.AnythingOfType("*context.emptyCtx"),
-		"veksh.in",
+		mock.Anything,
+		// mock.AnythingOfType("*context.emptyCtx"),
+		model.DNSDomain("veksh.in"),
 		[]model.DNSRecord{rec},
 	).Return(nil).Once()
 	mockClient.EXPECT().GetRecords(
-		mock.AnythingOfType("*context.emptyCtx"),
-		"veksh.in",
-		"CNAME",
-		"_test-cn._testacc",
+		// mock.AnythingOfType("*context.emptyCtx"),
+		mock.Anything,
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{rec}, nil)
+	mockClient.EXPECT().DelRecords(
+		mock.Anything,
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+	).Return(nil).Once()
 	// then: update + read back, then: delete
 	testProviderFactory := map[string]func() (tfprotov6.ProviderServer, error){
 		// pass test to the constructor
