@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
-	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
@@ -40,7 +39,7 @@ func NewRecordResource() resource.Resource {
 
 // RecordResource defines the resource implementation.
 type RecordResource struct {
-	client *client.Client
+	client model.DNSApiClient
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -120,11 +119,11 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 		return
 	}
 
-	client, ok := req.ProviderData.(*client.Client)
+	client, ok := req.ProviderData.(model.DNSApiClient)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *model.DNSApiClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
