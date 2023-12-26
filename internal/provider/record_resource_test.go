@@ -15,7 +15,7 @@ import (
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
-const ACC_TEST_DOM = "veksh.in"
+const TEST_DOMAIN = "veksh.in"
 
 // go test -count=1 -run='TestUnitCnameResource' -v ./internal/provider/
 func TestUnitCnameResource(t *testing.T) {
@@ -30,12 +30,12 @@ func TestUnitCnameResource(t *testing.T) {
 	}
 	mockClientAdd.EXPECT().AddRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		[]model.DNSRecord{recAdd},
 	).Return(nil).Once()
 	mockClientAdd.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recAdd}, nil)
@@ -58,7 +58,7 @@ func TestUnitCnameResource(t *testing.T) {
 	}
 	mockClientImp.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recImp}, nil)
@@ -81,7 +81,7 @@ func TestUnitCnameResource(t *testing.T) {
 	}
 	mockClientRef.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recRef}, nil)
@@ -116,26 +116,26 @@ func TestUnitCnameResource(t *testing.T) {
 	// if using same args + "Once": results could vary on 1st and 2nd call
 	mockClientUpd.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recOrig}, nil).Once()
 	mockClientUpd.EXPECT().SetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 		[]model.DNSRecord{rec2set},
 	).Return(nil).Once()
 	mockClientUpd.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recUpdated}, nil).Once()
 	mockClientUpd.EXPECT().DelRecords(
 		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
+		model.DNSDomain(TEST_DOMAIN),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return(nil).Once()
@@ -275,5 +275,5 @@ func testCnameResourceConfig(target string) string {
 	  type   = "CNAME"
 	  name   = "_test-cn._testacc"
 	  data   = "%s"
-	}`, ACC_TEST_DOM, target)
+	}`, TEST_DOMAIN, target)
 }
