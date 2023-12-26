@@ -28,15 +28,7 @@ const (
 	DOMAINS_URL  = "/v1/domains/"
 )
 
-type rateLimitedHTTPTransport struct {
-	limiter *ratelimiter.RateLimiter
-	next    http.RoundTripper
-}
-
-func (t *rateLimitedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.limiter.Wait()
-	return t.next.RoundTrip(req)
-}
+var _ model.DNSApiClient = Client{}
 
 // mb also http client here
 type Client struct {

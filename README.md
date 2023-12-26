@@ -14,14 +14,15 @@ or complain if expecting to manage it fully).
   - [x] pre-existing records: ok after import
   - [x] conf drift: ok refreshed on plan/apply
 - [x] fix integration tests
-- [ ] check github actions
+- [x] check github actions
   - [x] PR: fix lint vs docs generation
-  - [ ] merge: check that release is built ok
-- [ ] add some unit tests
-  - [ ] mock client: pass client factory as a param, create mocks in test
+  - [x] merge: check that release is built ok
+- [x] add some unit tests
+  - [x] mock client: pass client factory as a param, create mocks in test
   - alt 1: mock server: pass client url for a test server on localhost
-    - really an integration test: testing http client + server
-  - alt 2: intercep and mock (gock): also testing http client
+  - alt 2: intercept and mock (gock): also testing http client
+  - these really are integration tests: testing http client with mock server
+- [ ] add true API checks to integration tests
 - [ ] add more record types; test txt/mx updates
 - [ ] provide documentation
 - [ ] publish, test getting it from TF

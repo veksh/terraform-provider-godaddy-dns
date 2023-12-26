@@ -8,6 +8,8 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/provider"
 )
 
@@ -29,7 +31,11 @@ func main() {
 		Debug:   debug,
 	}
 
-	err := providerserver.Serve(context.Background(), provider.New(version), opts)
+	apiClientFactory := func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+		return client.NewClient(apiURL, apiKey, apiSecret)
+	}
+
+	err := providerserver.Serve(context.Background(), provider.New(version, apiClientFactory), opts)
 
 	if err != nil {
 		log.Fatal(err.Error())

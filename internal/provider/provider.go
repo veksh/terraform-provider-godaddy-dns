@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package provider
 
 import (
@@ -13,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
+	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
 // testing api at ote is useless
@@ -22,11 +19,12 @@ const GODADDY_API_URL = "https://api.godaddy.com"
 // https://pkg.go.dev/github.com/hashicorp/terraform-plugin-framework/provider
 var _ provider.Provider = &GoDaddyDNSProvider{}
 
+type APIClientFactory func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error)
+
 type GoDaddyDNSProvider struct {
 	// "dev" for local testing, "test" for acceptance tests, "v1.2.3" for prod
-	version string
-	// api client is stored in ResourceData in Configure
-	// apiClient apiClient
+	version       string
+	clientFactory APIClientFactory
 }
 
 func (p *GoDaddyDNSProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -99,7 +97,7 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 		return
 	}
 
-	client, err := client.NewClient(GODADDY_API_URL, apiKey, apiSecret)
+	client, err := p.clientFactory(GODADDY_API_URL, apiKey, apiSecret)
 	if err != nil {
 		resp.Diagnostics.AddError("failed to create API client", err.Error())
 		return
@@ -121,10 +119,11 @@ func (p *GoDaddyDNSProvider) DataSources(ctx context.Context) []func() datasourc
 	// }
 }
 
-func New(version string) func() provider.Provider {
+func New(version string, clientFactory APIClientFactory) func() provider.Provider {
 	return func() provider.Provider {
 		return &GoDaddyDNSProvider{
-			version: version,
+			version:       version,
+			clientFactory: clientFactory,
 		}
 	}
 }

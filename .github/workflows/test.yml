@@ -62,7 +62,7 @@ jobs:
         # list whatever Terraform versions here you would like to support
         terraform:
           # test only one for now: concurrent tests fight for the same resource
-          # mb will find a way to make names unique later
+          # mb later will use TF_ACC_TERRAFORM_VERSION or random res name prefix
           # - '1.5.*'
           - '1.6.*'
         # os:
