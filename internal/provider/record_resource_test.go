@@ -41,14 +41,6 @@ func TestUnitCnameResource(t *testing.T) {
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recAdd}, nil)
-	testProviderFactoryAdd := map[string]func() (tfprotov6.ProviderServer, error){
-		// pass test to the constructor
-		"godaddy-dns": providerserver.NewProtocol6WithError(New(
-			"test",
-			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
-				return model.DNSApiClient(mockClientAdd), nil
-			})()),
-	}
 
 	// read state
 	mockClientImp := model.NewMockDNSApiClient(t)
@@ -64,14 +56,6 @@ func TestUnitCnameResource(t *testing.T) {
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recImp}, nil)
-	testProviderFactoryImp := map[string]func() (tfprotov6.ProviderServer, error){
-		// pass test to the constructor
-		"godaddy-dns": providerserver.NewProtocol6WithError(New(
-			"test",
-			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
-				return model.DNSApiClient(mockClientImp), nil
-			})()),
-	}
 
 	// read recod, expect mismatch with saved state
 	mockClientRef := model.NewMockDNSApiClient(t)
@@ -87,14 +71,6 @@ func TestUnitCnameResource(t *testing.T) {
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return([]model.DNSRecord{recRef}, nil)
-	testProviderFactoryRef := map[string]func() (tfprotov6.ProviderServer, error){
-		// pass test to the constructor
-		"godaddy-dns": providerserver.NewProtocol6WithError(New(
-			"test",
-			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
-				return model.DNSApiClient(mockClientRef), nil
-			})()),
-	}
 
 	// read, update, clean up
 	// also: must skip update if already ok
@@ -142,14 +118,6 @@ func TestUnitCnameResource(t *testing.T) {
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
 	).Return(nil).Once()
-	testProviderFactoryUpd := map[string]func() (tfprotov6.ProviderServer, error){
-		// pass test to the constructor
-		"godaddy-dns": providerserver.NewProtocol6WithError(New(
-			"test",
-			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
-				return model.DNSApiClient(mockClientUpd), nil
-			})()),
-	}
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
@@ -157,7 +125,7 @@ func TestUnitCnameResource(t *testing.T) {
 			// create, read back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				ProtoV6ProviderFactories: testProviderFactoryAdd,
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
 				Config:                   testCnameResourceConfig("testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
@@ -176,7 +144,7 @@ func TestUnitCnameResource(t *testing.T) {
 			},
 			// read, compare with saved, should produce no plan
 			{
-				ProtoV6ProviderFactories: testProviderFactoryImp,
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientImp),
 				ResourceName:             "godaddy-dns_record.test-cname",
 				ImportState:              true,
 				ImportStateVerify:        true,
@@ -192,14 +160,14 @@ func TestUnitCnameResource(t *testing.T) {
 			},
 			// read, compare with saved, should produce update plan
 			{
-				ProtoV6ProviderFactories: testProviderFactoryRef,
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientRef),
 				ResourceName:             "godaddy-dns_record.test-cname",
 				RefreshState:             true,
 				ExpectNonEmptyPlan:       true,
 			},
 			// update, read back
 			{
-				ProtoV6ProviderFactories: testProviderFactoryUpd,
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
 				Config:                   testCnameResourceConfig("test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
@@ -239,6 +207,13 @@ func TestAccCnameResource(t *testing.T) {
 						"godaddy-dns_record.test-cname",
 						"data",
 						"testing.com"),
+					// func(*terraform.State) error {
+					// 	if false {
+					// 		t.Errorf("*** that was unexpected")
+					// 		return fmt.Errorf("!!! try to fail it")
+					// 	}
+					// 	return nil
+					// },
 				),
 			},
 			// import state
@@ -282,4 +257,14 @@ func testCnameResourceConfig(target string) string {
 	  name   = "_test-cn._testacc"
 	  data   = "%s"
 	}`, TEST_DOMAIN, target)
+}
+
+func mockClientProviderFactory(c *model.MockDNSApiClient) map[string]func() (tfprotov6.ProviderServer, error) {
+	return map[string]func() (tfprotov6.ProviderServer, error){
+		"godaddy-dns": providerserver.NewProtocol6WithError(New(
+			"test",
+			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+				return model.DNSApiClient(c), nil
+			})()),
+	}
 }
