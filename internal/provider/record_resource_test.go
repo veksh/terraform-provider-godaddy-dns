@@ -19,52 +19,119 @@ const ACC_TEST_DOM = "veksh.in"
 
 // go test -count=1 -run='TestUnitCnameResource' -v ./internal/provider/
 func TestUnitCnameResource(t *testing.T) {
-	mockClient := model.NewMockDNSApiClient(t)
-	// parent.EXPECT().
-	// 	StoreNotification(
-	// 		mock.AnythingOfType("*context.emptyCtx"),
-	// 		note20DaysAgoReq).
-	// 	Return(int64(1), nil).
-	// 	Once()
-	rec := model.DNSRecord{
+	// add record, read it back
+	mockClientAdd := model.NewMockDNSApiClient(t)
+	recAdd := model.DNSRecord{
 		Name: "_test-cn._testacc",
 		Type: "CNAME",
 		Data: "testing.com",
 		TTL:  3600,
 	}
-	mockClient.EXPECT().AddRecords(
+	mockClientAdd.EXPECT().AddRecords(
 		mock.AnythingOfType("*context.valueCtx"),
 		model.DNSDomain("veksh.in"),
-		[]model.DNSRecord{rec},
+		[]model.DNSRecord{recAdd},
 	).Return(nil).Once()
-	mockClient.EXPECT().GetRecords(
+	mockClientAdd.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
 		model.DNSDomain("veksh.in"),
 		model.DNSRecordType("CNAME"),
 		model.DNSRecordName("_test-cn._testacc"),
-	).Return([]model.DNSRecord{rec}, nil)
-	mockClient.EXPECT().DelRecords(
-		mock.AnythingOfType("*context.valueCtx"),
-		model.DNSDomain("veksh.in"),
-		model.DNSRecordType("CNAME"),
-		model.DNSRecordName("_test-cn._testacc"),
-	).Return(nil).Once()
-	// then: update + read back, then: delete
-	testProviderFactory := map[string]func() (tfprotov6.ProviderServer, error){
+	).Return([]model.DNSRecord{recAdd}, nil)
+	testProviderFactoryAdd := map[string]func() (tfprotov6.ProviderServer, error){
 		// pass test to the constructor
 		"godaddy-dns": providerserver.NewProtocol6WithError(New(
 			"test",
 			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
-				return model.DNSApiClient(mockClient), nil
+				return model.DNSApiClient(mockClientAdd), nil
 			})()),
 	}
+
+	// read state
+	mockClientImp := model.NewMockDNSApiClient(t)
+	recImp := model.DNSRecord{
+		Name: "_test-cn._testacc",
+		Type: "CNAME",
+		Data: "testing.com",
+		TTL:  3600,
+	}
+	mockClientImp.EXPECT().GetRecords(
+		mock.AnythingOfType("*context.valueCtx"),
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+	).Return([]model.DNSRecord{recImp}, nil)
+	testProviderFactoryImp := map[string]func() (tfprotov6.ProviderServer, error){
+		// pass test to the constructor
+		"godaddy-dns": providerserver.NewProtocol6WithError(New(
+			"test",
+			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+				return model.DNSApiClient(mockClientImp), nil
+			})()),
+	}
+
+	// read, update, clean up
+	// also: must skip update if already ok
+	mockClientUpd := model.NewMockDNSApiClient(t)
+	recOrig := model.DNSRecord{
+		Name: "_test-cn._testacc",
+		Type: "CNAME",
+		Data: "testing.com",
+		TTL:  3600,
+	}
+	rec2set := model.DNSRecord{
+		Data: "test.com",
+		TTL:  3600,
+	}
+	recUpdated := model.DNSRecord{
+		Name: "_test-cn._testacc",
+		Type: "CNAME",
+		Data: "test.com",
+		TTL:  3600,
+	}
+	// if using same args + "Once": results could vary on 1st and 2nd call
+	mockClientUpd.EXPECT().GetRecords(
+		mock.AnythingOfType("*context.valueCtx"),
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+	).Return([]model.DNSRecord{recOrig}, nil).Once()
+	mockClientUpd.EXPECT().SetRecords(
+		mock.AnythingOfType("*context.valueCtx"),
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+		[]model.DNSRecord{rec2set},
+	).Return(nil).Once()
+	mockClientUpd.EXPECT().GetRecords(
+		mock.AnythingOfType("*context.valueCtx"),
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+	).Return([]model.DNSRecord{recUpdated}, nil).Once()
+	mockClientUpd.EXPECT().DelRecords(
+		mock.AnythingOfType("*context.valueCtx"),
+		model.DNSDomain("veksh.in"),
+		model.DNSRecordType("CNAME"),
+		model.DNSRecordName("_test-cn._testacc"),
+	).Return(nil).Once()
+	testProviderFactoryUpd := map[string]func() (tfprotov6.ProviderServer, error){
+		// pass test to the constructor
+		"godaddy-dns": providerserver.NewProtocol6WithError(New(
+			"test",
+			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+				return model.DNSApiClient(mockClientUpd), nil
+			})()),
+	}
+
 	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: testProviderFactory,
+		// ProtoV6ProviderFactories: testProviderFactory,
 		Steps: []resource.TestStep{
-			// create + back
+			// create, read back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				Config: testAccExampleCnameResourceConfig("testing.com"),
+				ProtoV6ProviderFactories: testProviderFactoryAdd,
+				Config:                   testCnameResourceConfig("testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						"godaddy-dns_record.test-cname",
@@ -78,6 +145,33 @@ func TestUnitCnameResource(t *testing.T) {
 						"godaddy-dns_record.test-cname",
 						"data",
 						"testing.com"),
+				),
+			},
+			// read and update state
+			{
+				ProtoV6ProviderFactories: testProviderFactoryImp,
+				ResourceName:             "godaddy-dns_record.test-cname",
+				ImportState:              true,
+				ImportStateVerify:        true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.Modules[0].Resources["godaddy-dns_record.test-cname"].Primary.Attributes
+					return fmt.Sprintf("%s:%s:%s:%s",
+						attrs["domain"],
+						attrs["type"],
+						attrs["name"],
+						attrs["data"]), nil
+				},
+				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			// update, read back
+			{
+				ProtoV6ProviderFactories: testProviderFactoryUpd,
+				Config:                   testCnameResourceConfig("test.com"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						"godaddy-dns_record.test-cname",
+						"data",
+						"test.com"),
 				),
 			},
 		},
@@ -94,7 +188,7 @@ func TestAccCnameResource(t *testing.T) {
 			// create + back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				Config: testAccExampleCnameResourceConfig("testing.com"),
+				Config: testCnameResourceConfig("testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						"godaddy-dns_record.test-cname",
@@ -129,7 +223,7 @@ func TestAccCnameResource(t *testing.T) {
 			},
 			// update + read back
 			{
-				Config: testAccExampleCnameResourceConfig("test.com"),
+				Config: testCnameResourceConfig("test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						"godaddy-dns_record.test-cname",
@@ -141,7 +235,7 @@ func TestAccCnameResource(t *testing.T) {
 	})
 }
 
-func testAccExampleCnameResourceConfig(target string) string {
+func testCnameResourceConfig(target string) string {
 	return fmt.Sprintf(`
 	provider "godaddy-dns" {}
 	locals {testdomain = "%s"}
