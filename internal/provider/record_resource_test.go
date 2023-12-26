@@ -1,7 +1,8 @@
 package provider
 
 // run one test: like
-// TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
+// TF_LOG=debug TF_ACC=1 go test -timeout 10s -run='TestAccCnameResource' -v ./internal/provider/
+// go test -timeout 5s -run='TestUnitCnameResource' -v ./internal/provider/
 
 import (
 	"fmt"
@@ -17,10 +18,11 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
-// go test -count=1 -run='TestUnitCnameResource' -v ./internal/provider/
+// go test -timeout=5s -run='TestUnitCnameResource' -v ./internal/provider/
+// sadly, terraform framework hangs when mock calls t.FailNow(), so short timeout is essential :)
 func TestUnitCnameResource(t *testing.T) {
 	// add record, read it back
-	// also: calls DelRecord if step fails, mb add it + make optional
+	// also: calls DelRecord if step fails, mb add it as optional
 	mockClientAdd := model.NewMockDNSApiClient(t)
 	recAdd := model.DNSRecord{
 		Name: "_test-cn._testacc",
@@ -114,6 +116,7 @@ func TestUnitCnameResource(t *testing.T) {
 		TTL:  3600,
 	}
 	// if using same args + "Once": results could vary on 1st and 2nd call
+	// if more than 1 required: .Times(4)
 	mockClientUpd.EXPECT().GetRecords(
 		mock.AnythingOfType("*context.valueCtx"),
 		model.DNSDomain(TEST_DOMAIN),
@@ -211,10 +214,13 @@ func TestUnitCnameResource(t *testing.T) {
 
 // TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
 func TestAccCnameResource(t *testing.T) {
-	// alt: UnitTest (also run w/o TF_ACC=1, sets IsUnitTest = true)
+	// todo
+	// - CheckDestroy
+	// - real API checks
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		// CheckDestroy:
 		Steps: []resource.TestStep{
 			// create + back
 			{
