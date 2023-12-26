@@ -26,3 +26,4 @@ or complain if expecting to manage it fully).
 - [ ] add more record types; test txt/mx updates
 - [ ] provide documentation
 - [ ] publish, test getting it from TF
+- [ ] use in static site project
