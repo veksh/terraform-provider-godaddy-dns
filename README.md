@@ -23,7 +23,12 @@ or complain if expecting to manage it fully).
   - alt 2: intercept and mock (gock): also testing http client
   - these really are integration tests: testing http client with mock server
 - [x] add true API checks to integration tests
-- [ ] add more record types; test txt/mx updates
+- [ ] add more record types
+  - [ ] implement record type check; disallow SOA etc
+  - [ ] TXT: just several
+  - [ ] NS: just several; mb refuse to mod @ unless GODADDY_ALLOW_ROOTMOD is set
+  - [ ] MX: + prio
+  - [ ] SRV: + proto, service, port + prio, weight; mb postpone :)
 - [ ] provide documentation
 - [ ] publish, test getting it from TF
 - [ ] use in static site project

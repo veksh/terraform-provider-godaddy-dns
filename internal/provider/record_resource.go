@@ -61,7 +61,7 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "type: A, CNAME etc",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "SOA", "SRV", "TXT"}...),
+					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "SRV", "TXT"}...),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -84,21 +84,6 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Computed:            true, // must be computed to use a default
 				Default:             int64default.StaticInt64(3600),
 			},
-			/*
-				"defaulted": schema.StringAttribute{
-					MarkdownDescription: "Example configurable attribute with default value",
-					Optional:            true,
-					Computed:            true,
-					Default:             stringdefault.StaticString("example value when not configured"),
-				},
-				"id": schema.StringAttribute{
-					Computed:            true,
-					MarkdownDescription: "Example identifier",
-					PlanModifiers: []planmodifier.String{
-						stringplanmodifier.UseStateForUnknown(),
-					},
-				},
-			*/
 		},
 	}
 }
