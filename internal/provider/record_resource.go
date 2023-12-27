@@ -90,12 +90,11 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 }
 
 // add record fields to context; export TF_LOG=debug to view
-func setLogCtx(ctx context.Context, tfRec tfDNSRecord) context.Context {
+func setLogCtx(ctx context.Context, tfRec tfDNSRecord, op string) context.Context {
 	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
 	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
 	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
-	// so could search for logtype=custom in logs
-	ctx = tflog.SetField(ctx, "logtype", "custom")
+	ctx = tflog.SetField(ctx, "operation", op)
 	return ctx
 }
 
@@ -124,7 +123,7 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	ctx = setLogCtx(ctx, planData)
+	ctx = setLogCtx(ctx, planData, "create")
 
 	apiRec := model.DNSRecord{
 		Name: model.DNSRecordName(planData.Name.ValueString()),
@@ -156,7 +155,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	ctx = setLogCtx(ctx, priorData)
+	ctx = setLogCtx(ctx, priorData, "read")
 
 	apiDomain := model.DNSDomain(priorData.Domain.ValueString())
 	apiRecType := model.DNSRecordType(priorData.Type.ValueString())
@@ -174,7 +173,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		resp.State.RemoveResource(ctx)
 		return
 	} else {
-		tflog.Debug(ctx, fmt.Sprintf(
+		tflog.Info(ctx, fmt.Sprintf(
 			"Reading DNS record: found %d matching records", numRecs))
 		// meaning of "match" is different between types
 		//  - for A, AAAA, and CNAME (and SOA), there could be only 1 records
@@ -198,6 +197,8 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		}
 	}
 
+	tflog.Info(ctx, "DNS records read")
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &priorData)...)
 }
 
@@ -208,7 +209,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	ctx = setLogCtx(ctx, planData)
+	ctx = setLogCtx(ctx, planData, "update")
 
 	apiRec := model.DNSRecord{
 		Data: model.DNSRecordData(planData.Data.ValueString()),
@@ -241,7 +242,7 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	ctx = setLogCtx(ctx, priorData)
+	ctx = setLogCtx(ctx, priorData, "delete")
 
 	apiDomain := model.DNSDomain(priorData.Domain.ValueString())
 	apiName := model.DNSRecordName(priorData.Name.ValueString())
