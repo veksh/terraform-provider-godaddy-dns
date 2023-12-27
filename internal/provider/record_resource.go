@@ -61,7 +61,8 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "type: A, CNAME etc",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "SRV", "TXT"}...),
+					// TODO: implement SRV management :)
+					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "TXT"}...),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -134,7 +135,7 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	apiDomain := model.DNSDomain(planData.Domain.ValueString())
 	// add: does not check (read) if creating w/o prior state
 	// and so will fail on uniqueness violation (e.g. if CNAME already
-	// exists, even with the same name)
+	// exists, even with the same name); ok for us
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRec})
 
 	if err != nil {
@@ -178,13 +179,12 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		// meaning of "match" is different between types
 		//  - for A, AAAA, and CNAME (and SOA), there could be only 1 records
 		//    with a given name in domain
-		//  - for TXT there could be several, have to match by name
-		//  - for MX there could be several, have to match by name
-		//    - they could have different priorities; in theory, MX 0 and MX 10
-		//      could point to the same "name", but lets think that it is a
-		//      preversion :)
-		//  - for SRV there could several records with the same fields and
-		//    different names for e.g. load balancing
+		//  - for TXT, MX and NS there could be several, have to match by data
+		//    - MXes could have different priorities; in theory, MX 0 and MX 10
+		//      could point to the same "data", but lets think that it is a
+		//      preversion and replace it with one :)
+		//    - TXT and NS for same name could differ only in TTL
+		//  - for SRV there are a slew of PK attrs, will do it later
 		for _, rec := range apiRecs {
 			tflog.Debug(ctx, fmt.Sprintf(
 				"Reading DNS record: data %s, prio %d, ttl %d",

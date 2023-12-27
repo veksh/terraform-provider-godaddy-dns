@@ -24,7 +24,7 @@ or complain if expecting to manage it fully).
   - these really are integration tests: testing http client with mock server
 - [x] add true API checks to integration tests
 - [ ] add more record types
-  - [ ] implement record type check; disallow SOA etc
+  - [x] implement record type check; disallow SOA etc
   - [ ] TXT: just several
   - [ ] NS: just several; mb refuse to mod @ unless GODADDY_ALLOW_ROOTMOD is set
   - [ ] MX: + prio
