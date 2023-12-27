@@ -11,8 +11,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/pkg/errors"
@@ -200,16 +198,6 @@ func testCnameResourceConfig(target string) string {
 	  name   = "_test-cn._testacc"
 	  data   = "%s"
 	}`, TEST_DOMAIN, target)
-}
-
-func mockClientProviderFactory(c *model.MockDNSApiClient) map[string]func() (tfprotov6.ProviderServer, error) {
-	return map[string]func() (tfprotov6.ProviderServer, error){
-		"godaddy-dns": providerserver.NewProtocol6WithError(New(
-			"unittest",
-			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
-				return model.DNSApiClient(c), nil
-			})()),
-	}
 }
 
 func CheckApiRecordMach(resourceName string, apiClient *client.Client) resource.TestCheckFunc {

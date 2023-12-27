@@ -10,10 +10,14 @@ import (
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
-// testAccProtoV6ProviderFactories are used to instantiate a provider during
-// acceptance testing. The factory function will be invoked for every Terraform
-// CLI command executed to create a provider server to which the CLI can
-// reattach.
+// common pre-checks for all acceptance tests
+func testAccPreCheck(t *testing.T) {
+	if os.Getenv("GODADDY_API_KEY") == "" || os.Getenv("GODADDY_API_SECRET") == "" {
+		t.Fatal("env vars GODADDY_API_KEY and GODADDY_API_SECRET must be set")
+	}
+}
+
+// provider instantiation for acceptance tests: use real API
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	// pass test to the constructor
 	"godaddy-dns": providerserver.NewProtocol6WithError(New(
@@ -23,9 +27,13 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 		})()),
 }
 
-func testAccPreCheck(t *testing.T) {
-	// common pre-checks for all acceptance tests
-	if os.Getenv("GODADDY_API_KEY") == "" || os.Getenv("GODADDY_API_SECRET") == "" {
-		t.Fatal("env vars GODADDY_API_KEY and GODADDY_API_SECRET must be set")
+// provider instantiation for unit tests: use mock API
+func mockClientProviderFactory(c *model.MockDNSApiClient) map[string]func() (tfprotov6.ProviderServer, error) {
+	return map[string]func() (tfprotov6.ProviderServer, error){
+		"godaddy-dns": providerserver.NewProtocol6WithError(New(
+			"unittest",
+			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+				return model.DNSApiClient(c), nil
+			})()),
 	}
 }
