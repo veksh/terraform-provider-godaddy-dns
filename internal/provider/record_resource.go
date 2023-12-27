@@ -34,13 +34,34 @@ type tfDNSRecord struct {
 	Priority types.Int64  `tfsdk:"priority"`
 }
 
-func NewRecordResource() resource.Resource {
-	return &RecordResource{}
+// add record fields to context; export TF_LOG=debug to view
+func setLogCtx(ctx context.Context, tfRec tfDNSRecord, op string) context.Context {
+	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
+	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
+	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
+	ctx = tflog.SetField(ctx, "operation", op)
+	return ctx
 }
 
-// RecordResource defines the resource implementation.
+// convert from terraform data model into api data model
+func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
+	return model.DNSDomain(tfData.Domain.ValueString()),
+		model.DNSRecord{
+			Name:     model.DNSRecordName(tfData.Name.ValueString()),
+			Type:     model.DNSRecordType(tfData.Type.ValueString()),
+			Data:     model.DNSRecordData(tfData.Data.ValueString()),
+			TTL:      model.DNSRecordTTL(tfData.TTL.ValueInt64()),
+			Priority: model.DNSRecordPrio(tfData.Priority.ValueInt64()),
+		}
+}
+
+// RecordResource defines the implementation of GoDaddy DNS RR
 type RecordResource struct {
 	client model.DNSApiClient
+}
+
+func NewRecordResource() resource.Resource {
+	return &RecordResource{}
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -103,27 +124,6 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 	}
 }
 
-// add record fields to context; export TF_LOG=debug to view
-func setLogCtx(ctx context.Context, tfRec tfDNSRecord, op string) context.Context {
-	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
-	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
-	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
-	ctx = tflog.SetField(ctx, "operation", op)
-	return ctx
-}
-
-// convert from terraform data model into api data model
-func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
-	return model.DNSDomain(tfData.Domain.ValueString()),
-		model.DNSRecord{
-			Name:     model.DNSRecordName(tfData.Name.ValueString()),
-			Type:     model.DNSRecordType(tfData.Type.ValueString()),
-			Data:     model.DNSRecordData(tfData.Data.ValueString()),
-			TTL:      model.DNSRecordTTL(tfData.TTL.ValueInt64()),
-			Priority: model.DNSRecordPrio(tfData.Priority.ValueInt64()),
-		}
-}
-
 func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	// or it will panic on none
 	if req.ProviderData == nil {
@@ -134,7 +134,7 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *model.DNSApiClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Internal error: expected *model.DNSApiClient, got: %T", req.ProviderData),
 		)
 		return
 	}
@@ -154,7 +154,7 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	apiDomain, apiRecPlan := tf2model(planData)
 	// add: does not check (read) if creating w/o prior state
 	// and so will fail on uniqueness violation (e.g. if CNAME already
-	// exists, even with the same name); ok for us
+	// exists, even with the same name); ok for us -- let API do checking
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRecPlan})
 
 	if err != nil {
@@ -298,5 +298,4 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	for i, f := range []string{"domain", "type", "name", "data"} {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(f), idParts[i])...)
 	}
-	// resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("priority"), 0)...)
 }
