@@ -26,11 +26,12 @@ var (
 )
 
 type tfDNSRecord struct {
-	Domain types.String `tfsdk:"domain"`
-	Type   types.String `tfsdk:"type"`
-	Name   types.String `tfsdk:"name"`
-	Data   types.String `tfsdk:"data"`
-	TTL    types.Int64  `tfsdk:"ttl"`
+	Domain   types.String `tfsdk:"domain"`
+	Type     types.String `tfsdk:"type"`
+	Name     types.String `tfsdk:"name"`
+	Data     types.String `tfsdk:"data"`
+	TTL      types.Int64  `tfsdk:"ttl"`
+	Priority types.Int64  `tfsdk:"priority"`
 }
 
 func NewRecordResource() resource.Resource {
@@ -85,6 +86,13 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Computed:            true, // must be computed to use a default
 				Default:             int64default.StaticInt64(3600),
 			},
+			"priority": schema.Int64Attribute{
+				MarkdownDescription: "Priority for MX and SRV, def 0",
+				Optional:            true,
+				// Required:            false,
+				// Computed:            true, // must be computed to use a default
+				// Default:             int64default.StaticInt64(0),
+			},
 		},
 	}
 }
@@ -96,6 +104,18 @@ func setLogCtx(ctx context.Context, tfRec tfDNSRecord, op string) context.Contex
 	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
 	ctx = tflog.SetField(ctx, "operation", op)
 	return ctx
+}
+
+// convert from terraform data model into api data model
+func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
+	return model.DNSDomain(tfData.Domain.ValueString()),
+		model.DNSRecord{
+			Name:     model.DNSRecordName(tfData.Name.ValueString()),
+			Type:     model.DNSRecordType(tfData.Type.ValueString()),
+			Data:     model.DNSRecordData(tfData.Data.ValueString()),
+			TTL:      model.DNSRecordTTL(tfData.TTL.ValueInt64()),
+			Priority: model.DNSRecordPrio(tfData.Priority.ValueInt64()),
+		}
 }
 
 func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -114,16 +134,6 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 	}
 
 	r.client = client
-}
-
-func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
-	return model.DNSDomain(tfData.Domain.ValueString()),
-		model.DNSRecord{
-			Name: model.DNSRecordName(tfData.Name.ValueString()),
-			Type: model.DNSRecordType(tfData.Type.ValueString()),
-			Data: model.DNSRecordData(tfData.Data.ValueString()),
-			TTL:  model.DNSRecordTTL(tfData.TTL.ValueInt64()),
-		}
 }
 
 func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -194,6 +204,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 				// TODO: ok to always update? or need to check for match?
 				priorData.Data = types.StringValue(string(rec.Data))
 				priorData.TTL = types.Int64Value(int64(rec.TTL))
+				// priorData.Priority = types.Int64Value(0)
 			}
 			// will deal with more complex types later :)
 		}
@@ -281,4 +292,5 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	for i, f := range []string{"domain", "type", "name", "data"} {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(f), idParts[i])...)
 	}
+	// resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("priority"), 0)...)
 }
