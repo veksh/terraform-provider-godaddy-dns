@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -25,68 +26,46 @@ const TEST_DOMAIN = "veksh.in"
 // go test -timeout=5s -run='TestUnitCnameResource' -v ./internal/provider/
 // sadly, terraform framework hangs when mock calls t.FailNow(), so short timeout is essential :)
 func TestUnitCnameResource(t *testing.T) {
+	// common fixtures
 	resourceName := "godaddy-dns_record.test-cname"
 	mockCtx := mock.AnythingOfType("*context.valueCtx")
 	mockDom := model.DNSDomain(TEST_DOMAIN)
 	mockRType := model.DNSRecordType("CNAME")
 	mockRName := model.DNSRecordName("_test-cn._testacc")
+	mockRec := []model.DNSRecord{{
+		Name: "_test-cn._testacc",
+		Type: "CNAME",
+		Data: "testing.com",
+		TTL:  3600,
+	}}
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
 	mockClientAdd := model.NewMockDNSApiClient(t)
-	recAdd := []model.DNSRecord{{
-		Name: "_test-cn._testacc",
-		Type: "CNAME",
-		Data: "testing.com",
-		TTL:  3600,
-	}}
-	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, recAdd).Return(nil).Once()
-	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(recAdd, nil)
+	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRec).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
 
 	// read state
 	mockClientImp := model.NewMockDNSApiClient(t)
-	recImp := []model.DNSRecord{{
-		Name: "_test-cn._testacc",
-		Type: "CNAME",
-		Data: "testing.com",
-		TTL:  3600,
-	}}
-	mockClientImp.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(recImp, nil)
+	mockClientImp.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
 
 	// read recod, expect mismatch with saved state
 	mockClientRef := model.NewMockDNSApiClient(t)
-	recRef := []model.DNSRecord{{
-		Name: "_test-cn._testacc",
-		Type: "CNAME",
-		Data: "test-upd.com",
-		TTL:  3600,
-	}}
-	mockClientRef.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(recRef, nil)
+	mockRecRef := slices.Clone(mockRec)
+	mockRecRef[0].Data = "changed.com"
+	mockClientRef.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecRef, nil)
 
 	// read, update, clean up
 	// also: must skip update if already ok
 	mockClientUpd := model.NewMockDNSApiClient(t)
-	recOrig := []model.DNSRecord{{
-		Name: "_test-cn._testacc",
-		Type: "CNAME",
-		Data: "testing.com",
-		TTL:  3600,
-	}}
-	rec2set := []model.DNSRecord{{
-		Data: "test.com",
-		TTL:  3600,
-	}}
-	recUpdated := []model.DNSRecord{{
-		Name: "_test-cn._testacc",
-		Type: "CNAME",
-		Data: "test.com",
-		TTL:  3600,
-	}}
+	rec2set := []model.DNSRecord{{Data: "test.com", TTL: 3600}}
+	mockRecUpdated := slices.Clone(mockRec)
+	mockRecUpdated[0].Data = "test.com"
 	// if using same args + "Once": results could vary on 1st and 2nd call
 	// if more than 1 required: .Times(4)
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(recOrig, nil).Once()
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil).Once()
 	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(recUpdated, nil).Once()
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Once()
 	mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
 
 	resource.UnitTest(t, resource.TestCase{
