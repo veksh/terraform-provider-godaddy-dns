@@ -63,7 +63,16 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Required:            true,
 				Validators: []validator.String{
 					// TODO: implement SRV management :)
-					stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "MX", "NS", "TXT"}...),
+					stringvalidator.Any(
+						stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "NS", "TXT"}...),
+						stringvalidator.All(
+							// mx requires priority
+							stringvalidator.OneOf([]string{"MX"}...),
+							stringvalidator.AlsoRequires(path.Expressions{
+								path.MatchRoot("priority"),
+							}...),
+						),
+					),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -89,9 +98,6 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"priority": schema.Int64Attribute{
 				MarkdownDescription: "Priority for MX and SRV, def 0",
 				Optional:            true,
-				// Required:            false,
-				// Computed:            true, // must be computed to use a default
-				// Default:             int64default.StaticInt64(0),
 			},
 		},
 	}
