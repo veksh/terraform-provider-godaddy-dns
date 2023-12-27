@@ -71,7 +71,7 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 	if !(confData.APIKey.IsUnknown() || confData.APIKey.IsNull()) {
 		apiKey = confData.APIKey.ValueString()
 	}
-	if apiKey == "" {
+	if apiKey == "" && p.version != "unittest" {
 		// be more specific than resp.Diagnostics.AddError(...)
 		resp.Diagnostics.AddAttributeError(path.Root("api_key"),
 			"Missing API Key Configuration",
@@ -84,7 +84,7 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 	if !(confData.APISecret.IsUnknown() || confData.APISecret.IsNull()) {
 		apiSecret = confData.APISecret.ValueString()
 	}
-	if apiSecret == "" {
+	if apiSecret == "" && p.version != "unittest" {
 		resp.Diagnostics.AddAttributeError(path.Root("api_secret"),
 			"Missing API Secret Configuration",
 			"While configuring the provider, the API secret was not found in "+

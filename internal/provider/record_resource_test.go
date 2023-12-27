@@ -225,7 +225,7 @@ func testCnameResourceConfig(target string) string {
 func mockClientProviderFactory(c *model.MockDNSApiClient) map[string]func() (tfprotov6.ProviderServer, error) {
 	return map[string]func() (tfprotov6.ProviderServer, error){
 		"godaddy-dns": providerserver.NewProtocol6WithError(New(
-			"test",
+			"unittest",
 			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
 				return model.DNSApiClient(c), nil
 			})()),
