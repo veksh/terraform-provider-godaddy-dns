@@ -10,4 +10,4 @@
 
 ## 0.2.0
 
-- unit test, real api check for acceptance tests
+- unit tests, real api check in acceptance tests
