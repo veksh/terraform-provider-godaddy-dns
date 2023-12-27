@@ -116,6 +116,16 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 	r.client = client
 }
 
+func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
+	return model.DNSDomain(tfData.Domain.ValueString()),
+		model.DNSRecord{
+			Name: model.DNSRecordName(tfData.Name.ValueString()),
+			Type: model.DNSRecordType(tfData.Type.ValueString()),
+			Data: model.DNSRecordData(tfData.Data.ValueString()),
+			TTL:  model.DNSRecordTTL(tfData.TTL.ValueInt64()),
+		}
+}
+
 func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -125,17 +135,11 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	ctx = setLogCtx(ctx, planData, "create")
 
-	apiRec := model.DNSRecord{
-		Name: model.DNSRecordName(planData.Name.ValueString()),
-		Type: model.DNSRecordType(planData.Type.ValueString()),
-		Data: model.DNSRecordData(planData.Data.ValueString()),
-		TTL:  model.DNSRecordTTL(planData.TTL.ValueInt64()),
-	}
-	apiDomain := model.DNSDomain(planData.Domain.ValueString())
+	apiDomain, apiRecPlan := tf2model(planData)
 	// add: does not check (read) if creating w/o prior state
 	// and so will fail on uniqueness violation (e.g. if CNAME already
 	// exists, even with the same name); ok for us
-	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRec})
+	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRecPlan})
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error",
@@ -157,17 +161,15 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	ctx = setLogCtx(ctx, priorData, "read")
 
-	apiDomain := model.DNSDomain(priorData.Domain.ValueString())
-	apiRecType := model.DNSRecordType(priorData.Type.ValueString())
-	apiRecName := model.DNSRecordName(priorData.Name.ValueString())
+	apiDomain, apiRecState := tf2model(priorData)
 
-	apiRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecType, apiRecName)
+	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error",
 			fmt.Sprintf("Reading DNS records: query failed: %s", err))
 		return
 	}
-	if numRecs := len(apiRecs); numRecs == 0 {
+	if numRecs := len(apiAllRecs); numRecs == 0 {
 		tflog.Debug(ctx, "Reading DNS record: currently absent")
 		// no resource found: mb ok or need to re-create
 		resp.State.RemoveResource(ctx)
@@ -184,7 +186,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//      preversion and replace it with one :)
 		//    - TXT and NS for same name could differ only in TTL
 		//  - for SRV there are a slew of PK attrs, will do it later
-		for _, rec := range apiRecs {
+		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx, fmt.Sprintf(
 				"Reading DNS record: data %s, prio %d, ttl %d",
 				rec.Data, rec.Priority, rec.TTL))
@@ -211,17 +213,16 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	ctx = setLogCtx(ctx, planData, "update")
 
-	apiRec := model.DNSRecord{
-		Data: model.DNSRecordData(planData.Data.ValueString()),
-		TTL:  model.DNSRecordTTL(planData.TTL.ValueInt64()),
+	apiDomain, apiRecPlan := tf2model(planData)
+
+	apiUpdateRec := model.DNSRecord{
+		Data: apiRecPlan.Data,
+		TTL:  apiRecPlan.TTL,
 	}
-	apiDomain := model.DNSDomain(planData.Domain.ValueString())
-	apiName := model.DNSRecordName(planData.Name.ValueString())
-	apiType := model.DNSRecordType(planData.Type.ValueString())
 
 	// simple case of A/CNAME: only one record, so it is safe to replace
 	// TODO: implement read + modify + write for TXT etc
-	err := r.client.SetRecords(ctx, apiDomain, apiType, apiName, []model.DNSRecord{apiRec})
+	err := r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, []model.DNSRecord{apiUpdateRec})
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error",
@@ -244,11 +245,9 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	ctx = setLogCtx(ctx, priorData, "delete")
 
-	apiDomain := model.DNSDomain(priorData.Domain.ValueString())
-	apiName := model.DNSRecordName(priorData.Name.ValueString())
-	apiType := model.DNSRecordType(priorData.Type.ValueString())
+	apiDomain, apiRecState := tf2model(priorData)
 
-	err := r.client.DelRecords(ctx, apiDomain, apiType, apiName)
+	err := r.client.DelRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error",
@@ -273,13 +272,13 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	if len(idParts) != 4 {
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: domain:TYPE:name:data like mydom.com:CNAME:redir:www.other.com. Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier format: domain:TYPE:name:data"+
+				"like mydom.com:CNAME:www.subdom:www.other.com. Got: %q", req.ID),
 		)
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("domain"), idParts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("type"), idParts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), idParts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("data"), idParts[3])...)
+	for i, f := range []string{"domain", "type", "name", "data"} {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(f), idParts[i])...)
+	}
 }
