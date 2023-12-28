@@ -281,11 +281,9 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
-	// for CNAME and A: just one record replacing another
-
 	var apiUpdateRecs []model.DNSRecord
-
 	if apiRecPlan.Type.IsSingleValue() {
+		// for CNAME and A: just one record replacing another
 		apiUpdateRecs = []model.DNSRecord{{
 			Data: apiRecPlan.Data,
 			TTL:  apiRecPlan.TTL,
@@ -306,6 +304,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
 		// and finally, our record (TODO: SRV has more fields)
+		// TODO: if such record is already exists, do nothing (check in recsToKeep?)
 		apiUpdateRecs = append(apiUpdateRecs,
 			model.DNSRecord{
 				Data:     apiRecPlan.Data,
@@ -362,7 +361,11 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return
 		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiRecsToKeep)))
-		err = r.client.SetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name, apiRecsToKeep)
+		if len(apiRecsToKeep) == 0 {
+			err = r.client.DelRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
+		} else {
+			err = r.client.SetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name, apiRecsToKeep)
+		}
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error",
 				fmt.Sprintf("Replacing DNS records failed: %s", err))
