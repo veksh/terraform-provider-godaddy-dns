@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/pkg/errors"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
@@ -234,6 +235,41 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
 }
 
+func (r *RecordResource) apiRecsExceptState(ctx context.Context, stateData tfDNSRecord) ([]model.DNSRecord, error) {
+	// records may differ in data or value; should be present in current API reply
+	res := []model.DNSRecord{}
+	apiDomain, apiRecState := tf2model(stateData)
+	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
+	if err != nil {
+		return res, errors.Wrap(err, "Client error: query failed")
+	}
+	if numRecs := len(apiAllRecs); numRecs == 0 {
+		tflog.Warn(ctx, "API returned no records, will continue")
+	} else {
+		tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
+		numFound := 0
+		for _, rec := range apiAllRecs {
+			tflog.Debug(ctx,
+				fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
+			if rec.SameKey(apiRecState) {
+				tflog.Debug(ctx, "Matching DNS record found")
+				numFound += 1
+			} else {
+				// convert to update format
+				rec.Name = ""
+				rec.Type = ""
+				res = append(res, rec)
+			}
+		}
+		if numFound != 0 {
+			tflog.Warn(ctx,
+				fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
+		}
+		tflog.Info(ctx, fmt.Sprintf("Found %d records to keep", len(res)))
+	}
+	return res, nil
+}
+
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -245,53 +281,40 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
-	// for CNAME and A: only one record is required
-	apiUpdateRecs := []model.DNSRecord{{
-		Data: apiRecPlan.Data,
-		TTL:  apiRecPlan.TTL,
-	}}
+	// for CNAME and A: just one record replacing another
 
-	// for multi-valued records: copy all the rest except previous state
-	if !apiRecPlan.Type.IsSingleValue() {
+	var apiUpdateRecs []model.DNSRecord
+
+	if apiRecPlan.Type.IsSingleValue() {
+		apiUpdateRecs = []model.DNSRecord{{
+			Data: apiRecPlan.Data,
+			TTL:  apiRecPlan.TTL,
+		}}
+	} else {
+		// for multi-valued records: copy all the rest except previous state
 		var stateData tfDNSRecord
 		resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		// records may differ in data or value; should be present in current API reply
-		_, apiRecState := tf2model(stateData)
-		apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
+		var err error
+		apiUpdateRecs, err = r.apiRecsExceptState(ctx, stateData)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error",
-				fmt.Sprintf("Query failed: %s", err))
+				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
 			return
 		}
-		if numRecs := len(apiAllRecs); numRecs == 0 {
-			tflog.Warn(ctx, "API returned no records, will continue")
-		} else {
-			tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
-			numFound := 0
-			for _, rec := range apiAllRecs {
-				tflog.Debug(ctx,
-					fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
-				if rec.SameKey(apiRecState) {
-					tflog.Debug(ctx, "Matching DNS record found")
-					numFound += 1
-				} else {
-					// convert to update format
-					rec.Name = ""
-					rec.Type = ""
-					apiUpdateRecs = append(apiUpdateRecs, rec)
-				}
-			}
-			if numFound != 0 {
-				tflog.Warn(ctx,
-					fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
-			}
-			tflog.Info(ctx, fmt.Sprintf("Kept %d records", len(apiUpdateRecs)-1))
-		}
+		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
+		// and finally, our record (TODO: SRV has more fields)
+		apiUpdateRecs = append(apiUpdateRecs,
+			model.DNSRecord{
+				Data:     apiRecPlan.Data,
+				TTL:      apiRecPlan.TTL,
+				Priority: apiRecPlan.Priority,
+			})
 	}
 
+	// now replace all type + name records with our set
 	err := r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
 
 	if err != nil {
@@ -306,26 +329,46 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var priorData tfDNSRecord
+	var stateData tfDNSRecord
 
-	resp.Diagnostics.Append(req.State.Get(ctx, &priorData)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	ctx = setLogCtx(ctx, priorData, "delete")
+	ctx = setLogCtx(ctx, stateData, "delete")
 
-	apiDomain, apiRecState := tf2model(priorData)
+	apiDomain, apiRecState := tf2model(stateData)
 
-	// for single-value types, delete is ok; multi-valued have to be replaced
-	err := r.client.DelRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
-
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error",
-			fmt.Sprintf("Deleting DNS record: query failed: %s", err))
-		return
+	if apiRecState.Type.IsSingleValue() {
+		// for single-value types, delete is ok; multi-valued have to be replaced
+		err := r.client.DelRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error",
+				fmt.Sprintf("Deleting DNS record failed: %s", err))
+			return
+		}
+	} else {
+		// for multi-valued records: copy all the rest except previous state
+		var stateData tfDNSRecord
+		resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		apiRecsToKeep, err := r.apiRecsExceptState(ctx, stateData)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error",
+				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
+			return
+		}
+		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiRecsToKeep)))
+		err = r.client.SetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name, apiRecsToKeep)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error",
+				fmt.Sprintf("Replacing DNS records failed: %s", err))
+			return
+		}
 	}
-
 	tflog.Info(ctx, "DNS record deleted")
 }
 
