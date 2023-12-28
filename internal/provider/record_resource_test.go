@@ -29,10 +29,10 @@ func TestUnitCnameResource(t *testing.T) {
 	resourceName := "godaddy-dns_record.test-cname"
 	mockCtx := mock.AnythingOfType("*context.valueCtx")
 	mockDom := model.DNSDomain(TEST_DOMAIN)
-	mockRType := model.DNSRecordType("CNAME")
-	mockRName := model.DNSRecordName("_test-cn._testacc")
+	mockRType := model.REC_CNAME
+	mockRName := model.DNSRecordName("_test-cn._test")
 	mockRec := []model.DNSRecord{{
-		Name: "_test-cn._testacc",
+		Name: "_test-cn._test",
 		Type: "CNAME",
 		Data: "testing.com",
 		TTL:  3600,
@@ -83,7 +83,7 @@ func TestUnitCnameResource(t *testing.T) {
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"name",
-						"_test-cn._testacc"),
+						"_test-cn._test"),
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"data",
@@ -152,7 +152,7 @@ func TestAccCnameResource(t *testing.T) {
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"name",
-						"_test-cn._testacc"),
+						"_test-cn._test"),
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"data",
@@ -195,7 +195,7 @@ func testCnameResourceConfig(target string) string {
 	resource "godaddy-dns_record" "test-cname" {
 	  domain = "${local.testdomain}"
 	  type   = "CNAME"
-	  name   = "_test-cn._testacc"
+	  name   = "_test-cn._test"
 	  data   = "%s"
 	}`, TEST_DOMAIN, target)
 }
