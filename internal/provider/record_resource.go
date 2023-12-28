@@ -192,7 +192,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	} else {
 		tflog.Info(ctx, fmt.Sprintf(
-			"Reading DNS record: found %d matching records", numRecs))
+			"Reading DNS record: got %d answers", numRecs))
 		// meaning of "match" is different between types
 		//  - for A, AAAA, and CNAME (and SOA), there could be only 1 records
 		//    with a given name in domain
@@ -202,17 +202,27 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//      preversion and replace it with one :)
 		//    - TXT and NS for same name could differ only in TTL
 		//  - for SRV there are a slew of PK attrs, will do it later
+		numFound := 0
 		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx, fmt.Sprintf(
-				"Reading DNS record: data %s, prio %d, ttl %d",
-				rec.Data, rec.Priority, rec.TTL))
-			if rec.Type == "A" || rec.Type == "CNAME" || rec.Type == "AAAA" {
-				// TODO: ok to always update? or need to check for match?
+				"Got DNS record: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
+			if rec.SameKey(apiRecState) {
+				tflog.Info(ctx, "matching DNS record found")
 				priorData.Data = types.StringValue(string(rec.Data))
 				priorData.TTL = types.Int64Value(int64(rec.TTL))
-				// priorData.Priority = types.Int64Value(0)
+				switch rec.Type {
+				case "TXT", "MX", "NS":
+					priorData.Priority = types.Int64Value(int64(rec.Priority))
+				}
+				numFound += 1
 			}
-			// will deal with more complex types later :)
+		}
+		if numFound == 0 {
+			tflog.Info(ctx, "no matching record found")
+		} else {
+			if numFound > 1 {
+				tflog.Warn(ctx, "more than one maching record found, using last")
+			}
 		}
 	}
 

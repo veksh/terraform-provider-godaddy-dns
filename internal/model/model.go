@@ -40,6 +40,28 @@ type DNSRecord struct {
 	Port     DNSRecordSRVPort    // SRV, 1-65535
 }
 
+// compare key field to determine if two records refer to the same object
+// - for A and CNAME there could be only 1 RR with the same name, TTL is the only value
+// - for TXT and NS there could be several (so need to match by data),
+// - MX matches the same way, value is ttl + prio
+// - and SRV same if Protocol, Port, Service and Data are matched
+func (r DNSRecord) SameKey(r1 DNSRecord) bool {
+	if r.Type != r1.Type || r.Name != r1.Name {
+		return false
+	}
+	if r.Type == REC_CNAME || r.Type == REC_A || r.Type == REC_AAAA {
+		return true
+	}
+	if r.Type == REC_TXT || r.Type == REC_MX || r.Type == REC_NS {
+		return r.Data == r1.Data
+	}
+	if r.Type == REC_SRV {
+		return r.Protocol == r1.Protocol && r.Service == r1.Service && r.Data == r1.Data
+	}
+	// soa?
+	return false
+}
+
 // client
 type DNSApiClient interface {
 	AddRecords(ctx context.Context, domain DNSDomain, records []DNSRecord) error
