@@ -169,15 +169,15 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 }
 
 func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var priorData tfDNSRecord
-	resp.Diagnostics.Append(req.State.Get(ctx, &priorData)...)
+	var stateData tfDNSRecord
+	resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	ctx = setLogCtx(ctx, priorData, "read")
+	ctx = setLogCtx(ctx, stateData, "read")
 
-	apiDomain, apiRecState := tf2model(priorData)
+	apiDomain, apiRecState := tf2model(stateData)
 
 	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
 	if err != nil {
@@ -201,18 +201,21 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//      could point to the same "data", but lets think that it is a
 		//      preversion and replace it with one :)
 		//    - TXT and NS for same name could differ only in TTL
-		//  - for SRV there are a slew of PK attrs, will do it later
+		//  - for SRV PK is proto+service+port+data, value is weight+prio+ttl
 		numFound := 0
 		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx, fmt.Sprintf(
 				"Got DNS record: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
 			if rec.SameKey(apiRecState) {
 				tflog.Info(ctx, "matching DNS record found")
-				priorData.Data = types.StringValue(string(rec.Data))
-				priorData.TTL = types.Int64Value(int64(rec.TTL))
+				stateData.Data = types.StringValue(string(rec.Data))
+				stateData.TTL = types.Int64Value(int64(rec.TTL))
 				switch rec.Type {
-				case "TXT", "MX", "NS":
-					priorData.Priority = types.Int64Value(int64(rec.Priority))
+				case "MX":
+					stateData.Priority = types.Int64Value(int64(rec.Priority))
+				case "SRV":
+					stateData.Priority = types.Int64Value(int64(rec.Priority))
+					// TODO: weight
 				}
 				numFound += 1
 			}
@@ -228,7 +231,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	tflog.Info(ctx, "DNS records read")
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &priorData)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
 }
 
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -242,18 +245,58 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
-	apiUpdateRec := model.DNSRecord{
+	// for CNAME and A: only one record is required
+	apiUpdateRecs := []model.DNSRecord{{
 		Data: apiRecPlan.Data,
 		TTL:  apiRecPlan.TTL,
+	}}
+
+	// for multi-valued records: copy all the rest except previous state
+	if !apiRecPlan.Type.IsSingleValue() {
+		var stateData tfDNSRecord
+		resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		// records may differ in data or value; should be present in current API reply
+		_, apiRecState := tf2model(stateData)
+		apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error",
+				fmt.Sprintf("Query failed: %s", err))
+			return
+		}
+		if numRecs := len(apiAllRecs); numRecs == 0 {
+			tflog.Warn(ctx, "API returned no records, will continue")
+		} else {
+			tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
+			numFound := 0
+			for _, rec := range apiAllRecs {
+				tflog.Debug(ctx,
+					fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
+				if rec.SameKey(apiRecState) {
+					tflog.Debug(ctx, "Matching DNS record found")
+					numFound += 1
+				} else {
+					// convert to update format
+					rec.Name = ""
+					rec.Type = ""
+					apiUpdateRecs = append(apiUpdateRecs, rec)
+				}
+			}
+			if numFound != 0 {
+				tflog.Warn(ctx,
+					fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
+			}
+			tflog.Info(ctx, fmt.Sprintf("Kept %d records", len(apiUpdateRecs)-1))
+		}
 	}
 
-	// simple case of A/CNAME: only one record, so it is safe to replace
-	// TODO: implement read + modify + write for TXT etc
-	err := r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, []model.DNSRecord{apiUpdateRec})
+	err := r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error",
-			fmt.Sprintf("Updating DNS record: query failed: %s", err))
+			fmt.Sprintf("Updating DNS failed: %s", err))
 		return
 	}
 
@@ -274,6 +317,7 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	apiDomain, apiRecState := tf2model(priorData)
 
+	// for single-value types, delete is ok; multi-valued have to be replaced
 	err := r.client.DelRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
 
 	if err != nil {

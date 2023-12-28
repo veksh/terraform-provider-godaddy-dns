@@ -41,10 +41,12 @@ type DNSRecord struct {
 }
 
 // compare key field to determine if two records refer to the same object
-// - for A and CNAME there could be only 1 RR with the same name, TTL is the only value
-// - for TXT and NS there could be several (so need to match by data),
-// - MX matches the same way, value is ttl + prio
-// - and SRV same if Protocol, Port, Service and Data are matched
+//   - for A and CNAME there could be only 1 RR with the same name, TTL is the only value
+//   - for TXT and NS there could be several (so need to match by data),
+//   - MX matches the same way, value is ttl + prio (in theory, MX 0 and MX 10
+//     could point to the same host in "data", but lets think that it is a perversion
+//     and replace it with one record
+//   - and SRV same if Protocol, Port, Service and Data are matched
 func (r DNSRecord) SameKey(r1 DNSRecord) bool {
 	if r.Type != r1.Type || r.Name != r1.Name {
 		return false
@@ -56,10 +58,17 @@ func (r DNSRecord) SameKey(r1 DNSRecord) bool {
 		return r.Data == r1.Data
 	}
 	if r.Type == REC_SRV {
-		return r.Protocol == r1.Protocol && r.Service == r1.Service && r.Data == r1.Data
+		return r.Protocol == r1.Protocol && r.Service == r1.Service &&
+			r.Port == r1.Port && r.Data == r1.Data
 	}
 	// soa?
 	return false
+}
+
+// true if there is only one possible value for dom+type+key combination
+// i.e record is CNAME, A or AAAA
+func (t DNSRecordType) IsSingleValue() bool {
+	return t == REC_CNAME || t == REC_A || t == REC_AAAA
 }
 
 // client
