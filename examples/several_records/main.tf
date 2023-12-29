@@ -26,8 +26,7 @@ locals {
   }
 }
 
-# existing: import like
-# terraform import godaddy-dns_record.new-cname domain:CNAME:_test-cn:testing.com
+# with names like `godaddy-dns_record.array-of-records["mx"]`
 resource "godaddy-dns_record" "array-of-records" {
   for_each = local.records
   domain   = "veksh.in"

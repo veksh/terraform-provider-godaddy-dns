@@ -6,6 +6,11 @@ package provider
 // sadly, terraform framework hangs when mock calls t.FailNow(), so short timeout
 // is essential, especially for automated tests
 
+// todo
+// - ensure that externally-deleted resource is processed OK and doing NOOP
+// - check composite handling (`several_records` from examples)
+// - have basic test for MX'es (preferrable a pair of them + some pre-existing)
+
 import (
 	"context"
 	"fmt"
@@ -24,109 +29,6 @@ import (
 )
 
 const TEST_DOMAIN = "veksh.in"
-
-// test for a pair of MXes with different prios
-func TestUnitMXResourcePair(t *testing.T) {
-	// common fixtures
-	resourceName := "godaddy-dns_record.test-txt"
-	mockCtx := mock.AnythingOfType("*context.valueCtx")
-	mockDom := model.DNSDomain(TEST_DOMAIN)
-	mockRType := model.REC_TXT
-	mockRName := model.DNSRecordName("test-txt._test")
-	mockRec := []model.DNSRecord{{
-		Name: "test-txt._test",
-		Type: "TXT",
-		Data: "test text",
-		TTL:  3600,
-	}}
-
-	// add record, read it back
-	// also: calls DelRecord if step fails, mb add it as optional
-	mockClientAdd := model.NewMockDNSApiClient(t)
-	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRec).Return(nil).Once()
-	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
-
-	// read state
-	mockClientImp := model.NewMockDNSApiClient(t)
-	mockClientImp.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
-
-	// read recod, expect mismatch with saved state
-	// also: tries to destroy refreshed RR if last in pipeline; mostly ok
-	mockClientRef := model.NewMockDNSApiClient(t)
-	mockRecRefresh := slices.Clone(mockRec)
-	mockRecRefresh[0].Data = "changed text"
-	mockClientRef.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecRefresh, nil)
-
-	// read, update, clean up
-	// also: must skip update if already ok
-	mockClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: "updated text", TTL: 3600}}
-	mockRecUpdated := slices.Clone(mockRec)
-	mockRecUpdated[0].Data = "updated text"
-	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil).Times(2)
-	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
-	// same thing with delete
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
-	mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
-
-	resource.UnitTest(t, resource.TestCase{
-		// ProtoV6ProviderFactories: testProviderFactory,
-		Steps: []resource.TestStep{
-			// create, read back
-			{
-				// alt: ConfigFile or ConfigDirectory
-				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   simpleResourceConfig("TXT", "test text"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"type",
-						"TXT"),
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"name",
-						"test-txt._test"),
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"data",
-						"test text"),
-				),
-			},
-			// read, compare with saved, should produce no plan
-			{
-				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientImp),
-				ResourceName:             resourceName,
-				ImportState:              true,
-				ImportStateVerify:        true,
-				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
-					return fmt.Sprintf("%s:%s:%s:%s",
-						attrs["domain"], attrs["type"], attrs["name"], attrs["data"]), nil
-				},
-				ImportStateVerifyIdentifierAttribute: "name",
-			},
-			// read, compare with saved, should produce update plan
-			{
-				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientRef),
-				ResourceName:             resourceName,
-				RefreshState:             true,
-				ExpectNonEmptyPlan:       true,
-			},
-			// update, read back, clean up
-			{
-				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   simpleResourceConfig("TXT", "updated text"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"data",
-						"updated text"),
-				),
-			},
-		},
-	})
-}
 
 // check that if remote API state is already ok on plan application and no modification
 // is required (e.g. after external change to the resource) it will actually be skipped
