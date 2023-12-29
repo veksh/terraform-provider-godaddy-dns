@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -36,7 +37,7 @@ func TestUnitNSResourceNoModIfOk(t *testing.T) {
 	mockRec := []model.DNSRecord{{
 		Name: "test-ns._test",
 		Type: "NS",
-		Data: "ns1.imaginary.com",
+		Data: "ns1.test.com",
 		TTL:  3600,
 	}}
 
@@ -50,7 +51,7 @@ func TestUnitNSResourceNoModIfOk(t *testing.T) {
 	// also: must skip update if already ok
 	mockClientUpd := model.NewMockDNSApiClient(t)
 	mockRecUpdated := slices.Clone(mockRec)
-	mockRecUpdated[0].Data = "ns2.imaginary.com"
+	mockRecUpdated[0].Data = "ns2.test.com"
 	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
 	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
 	// no need for update: already ok
@@ -66,7 +67,7 @@ func TestUnitNSResourceNoModIfOk(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   testSimpleResourceConfig("ns1.imaginary.com"),
+				Config:                   simpleResourceConfig("NS", "ns1.test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -79,18 +80,18 @@ func TestUnitNSResourceNoModIfOk(t *testing.T) {
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"data",
-						"ns1.imaginary.com"),
+						"ns1.test.com"),
 				),
 			},
 			// update, read back, clean up
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   testSimpleResourceConfig("ns2.imaginary.com"),
+				Config:                   simpleResourceConfig("NS", "ns2.test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"data",
-						"ns2.imaginary.com"),
+						"ns2.test.com"),
 				),
 			},
 		},
@@ -144,7 +145,7 @@ func TestAccTXTResource(t *testing.T) {
 			// create + read back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				Config: testTXTResourceConfig("test text"),
+				Config: simpleResourceConfig("TXT", "test text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -163,7 +164,7 @@ func TestAccTXTResource(t *testing.T) {
 			},
 			// update + read back
 			{
-				Config: testTXTResourceConfig("updated text"),
+				Config: simpleResourceConfig("TXT", "updated text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -243,7 +244,7 @@ func TestUnitTXTResourceWithAnother(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   testTXTResourceConfig("test text"),
+				Config:                   simpleResourceConfig("TXT", "test text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -282,7 +283,7 @@ func TestUnitTXTResourceWithAnother(t *testing.T) {
 			// update, read back, clean up (keeping others)
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   testTXTResourceConfig("updated text"),
+				Config:                   simpleResourceConfig("TXT", "updated text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -348,7 +349,7 @@ func TestUnitTXTResourceAlone(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   testTXTResourceConfig("test text"),
+				Config:                   simpleResourceConfig("TXT", "test text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -387,7 +388,7 @@ func TestUnitTXTResourceAlone(t *testing.T) {
 			// update, read back, clean up
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   testTXTResourceConfig("updated text"),
+				Config:                   simpleResourceConfig("TXT", "updated text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -406,9 +407,9 @@ func TestUnitCnameResource(t *testing.T) {
 	mockCtx := mock.AnythingOfType("*context.valueCtx")
 	mockDom := model.DNSDomain(TEST_DOMAIN)
 	mockRType := model.REC_CNAME
-	mockRName := model.DNSRecordName("_test-cn._test")
+	mockRName := model.DNSRecordName("test-cname._test")
 	mockRec := []model.DNSRecord{{
-		Name: "_test-cn._test",
+		Name: "test-cname._test",
 		Type: "CNAME",
 		Data: "testing.com",
 		TTL:  3600,
@@ -450,7 +451,7 @@ func TestUnitCnameResource(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   testCnameResourceConfig("testing.com"),
+				Config:                   simpleResourceConfig("CNAME", "testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -459,7 +460,7 @@ func TestUnitCnameResource(t *testing.T) {
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"name",
-						"_test-cn._test"),
+						"test-cname._test"),
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"data",
@@ -489,7 +490,7 @@ func TestUnitCnameResource(t *testing.T) {
 			// update, read back
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   testCnameResourceConfig("test.com"),
+				Config:                   simpleResourceConfig("CNAME", "test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -518,7 +519,7 @@ func TestAccCnameResource(t *testing.T) {
 			// create + read back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				Config: testCnameResourceConfig("testing.com"),
+				Config: simpleResourceConfig("CNAME", "testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -527,7 +528,7 @@ func TestAccCnameResource(t *testing.T) {
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"name",
-						"_test-cn._test"),
+						"test-cname._test"),
 					resource.TestCheckResourceAttr(
 						resourceName,
 						"data",
@@ -540,7 +541,7 @@ func TestAccCnameResource(t *testing.T) {
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
-				// ImportStateId: "veksh.in:CNAME:_test-cn._testacc:test.com",
+				// ImportStateId: "veksh.in:CNAME:test-cname._testacc:test.com",
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
 					return fmt.Sprintf("%s:%s:%s:%s",
@@ -551,7 +552,7 @@ func TestAccCnameResource(t *testing.T) {
 			},
 			// update + read back
 			{
-				Config: testCnameResourceConfig("test.com"),
+				Config: simpleResourceConfig("CNAME", "test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
@@ -563,40 +564,16 @@ func TestAccCnameResource(t *testing.T) {
 	})
 }
 
-func testSimpleResourceConfig(target string) string {
+func simpleResourceConfig(rectype string, target string) string {
 	return fmt.Sprintf(`
 	provider "godaddy-dns" {}
 	locals {testdomain = "%s"}
-	resource "godaddy-dns_record" "test-ns" {
+	resource "godaddy-dns_record" "test-%s" {
 	  domain = "${local.testdomain}"
-	  type   = "NS"
-	  name   = "test-ns._test"
+	  type   = "%s"
+	  name   = "test-%s._test"
 	  data   = "%s"
-	}`, TEST_DOMAIN, target)
-}
-
-func testCnameResourceConfig(target string) string {
-	return fmt.Sprintf(`
-	provider "godaddy-dns" {}
-	locals {testdomain = "%s"}
-	resource "godaddy-dns_record" "test-cname" {
-	  domain = "${local.testdomain}"
-	  type   = "CNAME"
-	  name   = "_test-cn._test"
-	  data   = "%s"
-	}`, TEST_DOMAIN, target)
-}
-
-func testTXTResourceConfig(target string) string {
-	return fmt.Sprintf(`
-	provider "godaddy-dns" {}
-	locals {testdomain = "%s"}
-	resource "godaddy-dns_record" "test-txt" {
-	  domain = "${local.testdomain}"
-	  type   = "TXT"
-	  name   = "test-txt._test"
-	  data   = "%s"
-	}`, TEST_DOMAIN, target)
+	}`, TEST_DOMAIN, strings.ToLower(rectype), rectype, strings.ToLower(rectype), target)
 }
 
 func CheckApiRecordMach(resourceName string, apiClient *client.Client) resource.TestCheckFunc {
