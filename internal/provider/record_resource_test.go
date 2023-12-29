@@ -43,6 +43,11 @@ func TestUnitTXTResourceWithAnother(t *testing.T) {
 		Data: "do not modify",
 		TTL:  600}
 	mockRecs := []model.DNSRecord{mockRec, mockRecAnother}
+	mockRecYetAnother := model.DNSRecord{
+		Name: "test-txt._test",
+		Type: "TXT",
+		Data: "also appears",
+		TTL:  7200}
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
@@ -54,27 +59,27 @@ func TestUnitTXTResourceWithAnother(t *testing.T) {
 	mockClientImp := model.NewMockDNSApiClient(t)
 	mockClientImp.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil)
 
-	// read recod, expect mismatch with saved state
+	// read recod (similate changes, so rec not found), expect mismatch with saved state
 	// also: tries to destroy refreshed RR if last in pipeline; mostly ok
 	mockClientRef := model.NewMockDNSApiClient(t)
 	mockRecsRefresh := slices.Clone(mockRecs)
 	mockRecsRefresh[0].Data = "changed text"
 	mockClientRef.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecsRefresh, nil)
 
-	// read, update, clean up
-	// also: must skip update if already ok
+	// read (simulate another record added, and ours still present), update
+	// final step: clean up (not delete but set with 2 remaining records)
 	mockClientUpd := model.NewMockDNSApiClient(t)
 	rec2set := []model.DNSRecord{{Data: "do not modify", TTL: 600}, {Data: "updated text", TTL: 3600}}
 	mockRecsUpdated := slices.Clone(mockRecs)
 	mockRecsUpdated[0].Data = "updated text"
-	rec2keep := []model.DNSRecord{{Data: "do not modify", TTL: 600}}
-	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil).Times(2)
+	mockRecsUpdated = append(mockRecsUpdated, mockRecYetAnother)
+	recs2keep := []model.DNSRecord{{Data: "do not modify", TTL: 600}, {Data: "also appears", TTL: 7200}}
+	// 2 gets: 1st for read/refresh, 2nd for uptate/find recs to keep
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil).Twice()
 	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
-	// same thing with delete
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecsUpdated, nil).Times(2)
-	// mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
-	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2keep).Return(nil).Once()
+	// same thing with delete: refresh, enumerate recs to keep
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecsUpdated, nil).Twice()
+	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, recs2keep).Return(nil).Once()
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
@@ -119,7 +124,7 @@ func TestUnitTXTResourceWithAnother(t *testing.T) {
 				RefreshState:             true,
 				ExpectNonEmptyPlan:       true,
 			},
-			// update, read back
+			// update, read back, clean up (keeping others)
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
 				Config:                   testTXTResourceConfig("updated text"),
@@ -224,7 +229,7 @@ func TestUnitTXTResourceAlone(t *testing.T) {
 				RefreshState:             true,
 				ExpectNonEmptyPlan:       true,
 			},
-			// update, read back
+			// update, read back, clean up
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
 				Config:                   testTXTResourceConfig("updated text"),
