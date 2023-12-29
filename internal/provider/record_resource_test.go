@@ -22,6 +22,57 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
+// TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
+func TestAccTXTResource(t *testing.T) {
+
+	// move to some setup, like pre-checks; raise t.Fatal if not
+	apiClient, err := client.NewClient(
+		GODADDY_API_URL,
+		os.Getenv("GODADDY_API_KEY"),
+		os.Getenv("GODADDY_API_SECRET"))
+	assert.Nil(t, err, "cannot create client")
+
+	resourceName := "godaddy-dns_record.test-txt"
+	resource.Test(t, resource.TestCase{
+		// mb also: CheckDestroy to check for correct clean-up
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		// CheckDestroy:
+		Steps: []resource.TestStep{
+			// create + read back
+			{
+				// alt: ConfigFile or ConfigDirectory
+				Config: testTXTResourceConfig("test text"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"type",
+						"TXT"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"name",
+						"test-txt._test"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"test text"),
+					CheckApiRecordMach(resourceName, apiClient),
+				),
+			},
+			// update + read back
+			{
+				Config: testTXTResourceConfig("updated text"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"updated text"),
+				),
+			},
+		},
+	})
+}
+
 // TF_LOG=debug go test -timeout=5s -run='TestUnitTXTResourceWithAnother' -v ./internal/provider/
 func TestUnitTXTResourceWithAnother(t *testing.T) {
 	// TODO
@@ -360,7 +411,6 @@ func TestAccCnameResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		// CheckDestroy:
 		Steps: []resource.TestStep{
 			// create + read back
 			{
