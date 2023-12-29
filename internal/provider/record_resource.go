@@ -261,7 +261,7 @@ func (r *RecordResource) apiRecsExceptState(ctx context.Context, stateData tfDNS
 				res = append(res, rec)
 			}
 		}
-		if numFound != 0 {
+		if numFound != 1 {
 			tflog.Warn(ctx,
 				fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
 		}
