@@ -22,6 +22,118 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
+// TF_LOG=debug go test -timeout=5s -run='TestUnitTXTResourceWithAnother' -v ./internal/provider/
+func TestUnitTXTResourceWithAnother(t *testing.T) {
+	// TODO
+	// - update if already ok (state is different, but read same record)
+	// common fixtures
+	resourceName := "godaddy-dns_record.test-txt"
+	mockCtx := mock.AnythingOfType("*context.valueCtx")
+	mockDom := model.DNSDomain(TEST_DOMAIN)
+	mockRType := model.REC_TXT
+	mockRName := model.DNSRecordName("test-txt._test")
+	mockRec := model.DNSRecord{
+		Name: "test-txt._test",
+		Type: "TXT",
+		Data: "test text",
+		TTL:  3600}
+	mockRecAnother := model.DNSRecord{
+		Name: "test-txt._test",
+		Type: "TXT",
+		Data: "do not modify",
+		TTL:  600}
+	mockRecs := []model.DNSRecord{mockRec, mockRecAnother}
+
+	// add record, read it back
+	// also: calls DelRecord if step fails, mb add it as optional
+	mockClientAdd := model.NewMockDNSApiClient(t)
+	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, []model.DNSRecord{mockRec}).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil)
+
+	// read state
+	mockClientImp := model.NewMockDNSApiClient(t)
+	mockClientImp.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil)
+
+	// read recod, expect mismatch with saved state
+	// also: tries to destroy refreshed RR if last in pipeline; mostly ok
+	mockClientRef := model.NewMockDNSApiClient(t)
+	mockRecsRefresh := slices.Clone(mockRecs)
+	mockRecsRefresh[0].Data = "changed text"
+	mockClientRef.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecsRefresh, nil)
+
+	// read, update, clean up
+	// also: must skip update if already ok
+	mockClientUpd := model.NewMockDNSApiClient(t)
+	rec2set := []model.DNSRecord{{Data: "do not modify", TTL: 600}, {Data: "updated text", TTL: 3600}}
+	mockRecsUpdated := slices.Clone(mockRecs)
+	mockRecsUpdated[0].Data = "updated text"
+	rec2keep := []model.DNSRecord{{Data: "do not modify", TTL: 600}}
+	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil).Times(2)
+	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
+	// same thing with delete
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecsUpdated, nil).Times(2)
+	// mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
+	mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2keep).Return(nil).Once()
+
+	resource.UnitTest(t, resource.TestCase{
+		// ProtoV6ProviderFactories: testProviderFactory,
+		Steps: []resource.TestStep{
+			// create, read back
+			{
+				// alt: ConfigFile or ConfigDirectory
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
+				Config:                   testTXTResourceConfig("test text"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"type",
+						"TXT"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"name",
+						"test-txt._test"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"test text"),
+				),
+			},
+			// read, compare with saved, should produce no plan
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientImp),
+				ResourceName:             resourceName,
+				ImportState:              true,
+				ImportStateVerify:        true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
+					return fmt.Sprintf("%s:%s:%s:%s",
+						attrs["domain"], attrs["type"], attrs["name"], attrs["data"]), nil
+				},
+				ImportStateVerifyIdentifierAttribute: "name",
+			},
+			// read, compare with saved, should produce update plan
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientRef),
+				ResourceName:             resourceName,
+				RefreshState:             true,
+				ExpectNonEmptyPlan:       true,
+			},
+			// update, read back
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
+				Config:                   testTXTResourceConfig("updated text"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"updated text"),
+				),
+			},
+		},
+	})
+}
+
 // TF_LOG=debug go test -timeout=5s -run='TestUnitTXTResource' -v ./internal/provider/
 func TestUnitTXTResourceAlone(t *testing.T) {
 	// TODO
