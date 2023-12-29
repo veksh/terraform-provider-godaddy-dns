@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -235,41 +236,6 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
 }
 
-func (r *RecordResource) apiRecsExceptState(ctx context.Context, stateData tfDNSRecord) ([]model.DNSRecord, error) {
-	// records may differ in data or value; should be present in current API reply
-	res := []model.DNSRecord{}
-	apiDomain, apiRecState := tf2model(stateData)
-	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
-	if err != nil {
-		return res, errors.Wrap(err, "Client error: query failed")
-	}
-	if numRecs := len(apiAllRecs); numRecs == 0 {
-		tflog.Warn(ctx, "API returned no records, will continue")
-	} else {
-		tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
-		numFound := 0
-		for _, rec := range apiAllRecs {
-			tflog.Debug(ctx,
-				fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
-			if rec.SameKey(apiRecState) {
-				tflog.Debug(ctx, "Matching DNS record found")
-				numFound += 1
-			} else {
-				// convert to update format
-				rec.Name = ""
-				rec.Type = ""
-				res = append(res, rec)
-			}
-		}
-		if numFound != 1 {
-			tflog.Warn(ctx,
-				fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
-		}
-		tflog.Info(ctx, fmt.Sprintf("Found %d records to keep", len(res)))
-	}
-	return res, nil
-}
-
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -281,13 +247,16 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
+	var err error
 	var apiUpdateRecs []model.DNSRecord
 	if apiRecPlan.Type.IsSingleValue() {
 		// for CNAME and A: just one record replacing another
-		apiUpdateRecs = []model.DNSRecord{{
-			Data: apiRecPlan.Data,
-			TTL:  apiRecPlan.TTL,
-		}}
+		err = r.client.SetRecords(ctx,
+			apiDomain, apiRecPlan.Type, apiRecPlan.Name,
+			[]model.DNSRecord{{
+				Data: apiRecPlan.Data,
+				TTL:  apiRecPlan.TTL,
+			}})
 	} else {
 		// for multi-valued records: copy all the rest except previous state
 		var stateData tfDNSRecord
@@ -295,8 +264,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		var err error
-		apiUpdateRecs, err = r.apiRecsExceptState(ctx, stateData)
+		apiUpdateRecs, err = r.apiRecsToKeep(ctx, stateData)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error",
 				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
@@ -305,16 +273,19 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
 		// and finally, our record (TODO: SRV has more fields)
 		// TODO: if such record is already exists, do nothing (check in recsToKeep?)
-		apiUpdateRecs = append(apiUpdateRecs,
-			model.DNSRecord{
-				Data:     apiRecPlan.Data,
-				TTL:      apiRecPlan.TTL,
-				Priority: apiRecPlan.Priority,
-			})
+		ourRec := model.DNSRecord{
+			Data:     apiRecPlan.Data,
+			TTL:      apiRecPlan.TTL,
+			Priority: apiRecPlan.Priority,
+		}
+		if slices.Index(apiUpdateRecs, ourRec) >= 0 {
+			tflog.Info(ctx, "Record is already present, nothing to do")
+			err = nil
+		} else {
+			apiUpdateRecs = append(apiUpdateRecs, ourRec)
+			err = r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
+		}
 	}
-
-	// now replace all type + name records with our set
-	err := r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
 
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error",
@@ -354,7 +325,7 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		apiRecsToKeep, err := r.apiRecsExceptState(ctx, stateData)
+		apiRecsToKeep, err := r.apiRecsToKeep(ctx, stateData)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error",
 				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
@@ -398,4 +369,43 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	for i, f := range []string{"domain", "type", "name", "data"} {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(f), idParts[i])...)
 	}
+}
+
+// get all records for type + name, return all of them except the record
+// matching stateData (it will be deleted or updated), converted to update
+// format (without type and name); these are intended to be kept unchanged
+// during update/delete ops on target record
+func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecord) ([]model.DNSRecord, error) {
+	// records may differ in data or value; should be present in current API reply
+	res := []model.DNSRecord{}
+	apiDomain, apiRecState := tf2model(stateData)
+	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
+	if err != nil {
+		return res, errors.Wrap(err, "Client error: query failed")
+	}
+	if numRecs := len(apiAllRecs); numRecs == 0 {
+		tflog.Warn(ctx, "API returned no records, will continue")
+	} else {
+		tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
+		numFound := 0
+		for _, rec := range apiAllRecs {
+			tflog.Debug(ctx,
+				fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
+			if rec.SameKey(apiRecState) {
+				tflog.Debug(ctx, "Matching DNS record found")
+				numFound += 1
+			} else {
+				// convert to update format
+				rec.Name = ""
+				rec.Type = ""
+				res = append(res, rec)
+			}
+		}
+		if numFound != 1 {
+			tflog.Warn(ctx,
+				fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
+		}
+		tflog.Info(ctx, fmt.Sprintf("Found %d records to keep", len(res)))
+	}
+	return res, nil
 }

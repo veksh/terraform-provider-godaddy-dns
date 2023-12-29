@@ -1,8 +1,10 @@
 package provider
 
 // run one test: like
-// TF_LOG=debug TF_ACC=1 go test -timeout 10s -run='TestAccCnameResource' -v ./internal/provider/
-// go test -timeout 5s -run='TestUnitCnameResource' -v ./internal/provider/
+// TF_ACC=1 go test -timeout 30s -run='TestAccCnameResource' -v ./internal/provider/
+// TF_LOG=info go test -timeout 5s -run='TestUnitCnameResource' -v ./internal/provider/
+// sadly, terraform framework hangs when mock calls t.FailNow(), so short timeout
+// is essential, especially for automated tests
 
 import (
 	"context"
@@ -22,7 +24,81 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
-// TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
+// check that if remote API state is already ok on plan application and no modification
+// is required (e.g. after external change to the resource) it will actually be skipped
+func TestUnitNSResourceNoModIfOk(t *testing.T) {
+	// common fixtures
+	resourceName := "godaddy-dns_record.test-ns"
+	mockCtx := mock.AnythingOfType("*context.valueCtx")
+	mockDom := model.DNSDomain(TEST_DOMAIN)
+	mockRType := model.REC_NS
+	mockRName := model.DNSRecordName("test-ns._test")
+	mockRec := []model.DNSRecord{{
+		Name: "test-ns._test",
+		Type: "NS",
+		Data: "ns1.imaginary.com",
+		TTL:  3600,
+	}}
+
+	// add record, read it back
+	// also: calls DelRecord if step fails, mb add it as optional
+	mockClientAdd := model.NewMockDNSApiClient(t)
+	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRec).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
+
+	// read, skip update because it is ok already, clean up
+	// also: must skip update if already ok
+	mockClientUpd := model.NewMockDNSApiClient(t)
+	mockRecUpdated := slices.Clone(mockRec)
+	mockRecUpdated[0].Data = "ns2.imaginary.com"
+	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
+	// no need for update: already ok
+	// mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
+	// same thing with delete
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
+	mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
+
+	resource.UnitTest(t, resource.TestCase{
+		// ProtoV6ProviderFactories: testProviderFactory,
+		Steps: []resource.TestStep{
+			// create, read back
+			{
+				// alt: ConfigFile or ConfigDirectory
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
+				Config:                   testSimpleResourceConfig("ns1.imaginary.com"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"type",
+						"NS"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"name",
+						"test-ns._test"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"ns1.imaginary.com"),
+				),
+			},
+			// update, read back, clean up
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
+				Config:                   testSimpleResourceConfig("ns2.imaginary.com"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"ns2.imaginary.com"),
+				),
+			},
+		},
+	})
+}
+
+// test that modifications to TXT record are not affecting another TXT records
+// with the same name (by pre-creating one and checking it is ok afterwards)
 func TestAccTXTResource(t *testing.T) {
 
 	// client does not complain on empty key/secret if not used
@@ -99,7 +175,9 @@ func TestAccTXTResource(t *testing.T) {
 	})
 }
 
-// TF_LOG=debug go test -timeout=5s -run='TestUnitTXTResourceWithAnother' -v ./internal/provider/
+// unit test to check that modifications to TXT record would not affect
+// neighbour TXT records with the same name (either already present or
+// appeared after first application)
 func TestUnitTXTResourceWithAnother(t *testing.T) {
 	// TODO
 	// - update if already ok (state is different, but read same record)
@@ -216,7 +294,7 @@ func TestUnitTXTResourceWithAnother(t *testing.T) {
 	})
 }
 
-// TF_LOG=debug go test -timeout=5s -run='TestUnitTXTResource' -v ./internal/provider/
+// simple unit test for CRUD of TXT record (alone)
 func TestUnitTXTResourceAlone(t *testing.T) {
 	// TODO
 	// - update if already ok (state is different, but read same record)
@@ -321,8 +399,7 @@ func TestUnitTXTResourceAlone(t *testing.T) {
 	})
 }
 
-// go test -timeout=5s -run='TestUnitCnameResource' -v ./internal/provider/
-// sadly, terraform framework hangs when mock calls t.FailNow(), so short timeout is essential :)
+// simple unit test for CRUD of CNAME record
 func TestUnitCnameResource(t *testing.T) {
 	// common fixtures
 	resourceName := "godaddy-dns_record.test-cname"
@@ -424,7 +501,7 @@ func TestUnitCnameResource(t *testing.T) {
 	})
 }
 
-// TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
+// simple acceptance test for CRUD of CNAME record
 func TestAccCnameResource(t *testing.T) {
 
 	apiClient, err := client.NewClient(
@@ -484,6 +561,18 @@ func TestAccCnameResource(t *testing.T) {
 			},
 		},
 	})
+}
+
+func testSimpleResourceConfig(target string) string {
+	return fmt.Sprintf(`
+	provider "godaddy-dns" {}
+	locals {testdomain = "%s"}
+	resource "godaddy-dns_record" "test-ns" {
+	  domain = "${local.testdomain}"
+	  type   = "NS"
+	  name   = "test-ns._test"
+	  data   = "%s"
+	}`, TEST_DOMAIN, target)
 }
 
 func testCnameResourceConfig(target string) string {

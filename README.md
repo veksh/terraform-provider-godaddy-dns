@@ -26,9 +26,10 @@ or complain if expecting to manage it fully).
 - [ ] add more record types
   - [x] implement record type check; disallow SOA etc
   - [x] TXT: just several
-  - [ ] NS: just several; mb refuse to mod @ unless GODADDY_ALLOW_ROOTMOD is set
+  - [ ] NS: just several
   - [ ] MX: + prio
-  - [ ] SRV: + proto, service, port + prio, weight; mb postpone :)
+  - mb refuse to mod @ unless GODADDY_ALLOW_ROOTMOD is set?
+  - mb SRV: + proto, service, port + prio, weight; mb postpone :)
 - [ ] provide documentation
 - [ ] publish, test getting it from TF
 - [ ] use in static site project
