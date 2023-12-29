@@ -25,7 +25,7 @@ or complain if expecting to manage it fully).
 - [x] add true API checks to integration tests
 - [ ] add more record types
   - [x] implement record type check; disallow SOA etc
-  - [ ] TXT: just several
+  - [x] TXT: just several
   - [ ] NS: just several; mb refuse to mod @ unless GODADDY_ALLOW_ROOTMOD is set
   - [ ] MX: + prio
   - [ ] SRV: + proto, service, port + prio, weight; mb postpone :)
