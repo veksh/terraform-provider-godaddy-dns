@@ -25,7 +25,7 @@ const TEST_DOMAIN = "veksh.in"
 // TF_LOG=debug TF_ACC=1 go test -count=1 -run='TestAccCnameResource' -v ./internal/provider/
 func TestAccTXTResource(t *testing.T) {
 
-	// move to some setup, like pre-checks; raise t.Fatal if not
+	// client does not complain on empty key/secret if not used
 	apiClient, err := client.NewClient(
 		GODADDY_API_URL,
 		os.Getenv("GODADDY_API_KEY"),
@@ -34,10 +34,36 @@ func TestAccTXTResource(t *testing.T) {
 
 	resourceName := "godaddy-dns_record.test-txt"
 	resource.Test(t, resource.TestCase{
-		// mb also: CheckDestroy to check for correct clean-up
-		PreCheck:                 func() { testAccPreCheck(t) },
+		PreCheck: func() {
+			rec := []model.DNSRecord{{
+				Name: "test-txt._test",
+				Type: "TXT",
+				Data: "not to be modified",
+				TTL:  600,
+			}}
+			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, rec)
+			// ignore error: ok to be left over from previous test
+		},
+		CheckDestroy: func(*terraform.State) error {
+			var recs []model.DNSRecord
+			recs, err := apiClient.GetRecords(context.Background(),
+				TEST_DOMAIN, "TXT", "test-txt._test")
+			if err == nil {
+				if len(recs) == 0 {
+					return fmt.Errorf("too much cleanup: old record did not survive")
+				}
+				if len(recs) > 1 {
+					return fmt.Errorf("too many records left")
+				}
+				if recs[0].Data != "not to be modified" {
+					return fmt.Errorf("unexpectd modification to an old record")
+				}
+				err = apiClient.DelRecords(context.Background(),
+					TEST_DOMAIN, "TXT", "test-txt._test")
+			}
+			return err
+		},
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		// CheckDestroy:
 		Steps: []resource.TestStep{
 			// create + read back
 			{
@@ -494,13 +520,25 @@ func CheckApiRecordMach(resourceName string, apiClient *client.Client) resource.
 			model.DNSRecordType(attrs["type"]),
 			model.DNSRecordName(attrs["name"]))
 		if err != nil {
-			return errors.Wrap(err, "api check client error")
+			return errors.Wrap(err, "result cross-check with API: client error")
 		}
-		if len(apiRecs) != 1 {
-			return fmt.Errorf("api check: wrong number of results")
-		}
-		if string(apiRecs[0].Data) != attrs["data"] {
-			return fmt.Errorf("api check: data mismatch (%s not %s)", apiRecs[0].Data, attrs["data"])
+		if model.DNSRecordType(attrs["type"]).IsSingleValue() {
+			if len(apiRecs) != 1 {
+				return fmt.Errorf("result cross-check with API: wrong number of results")
+			}
+			if string(apiRecs[0].Data) != attrs["data"] {
+				return fmt.Errorf("result cross-check with API: data mismatch (%s not %s)", apiRecs[0].Data, attrs["data"])
+			}
+		} else {
+			if len(apiRecs) < 1 {
+				return fmt.Errorf("result cross-check with API: no results found")
+			}
+			for _, rec := range apiRecs {
+				if rec.Data == model.DNSRecordData(attrs["data"]) {
+					return nil
+				}
+			}
+			return fmt.Errorf("result cross-check with API: none of %d results matched", len(apiRecs))
 		}
 		return nil
 	}
