@@ -34,6 +34,73 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
+// simple MX resource lifecycle
+func TestUnitMXResourceLifecycle(t *testing.T) {
+	mCtx := mock.AnythingOfType("*context.valueCtx")
+	mDom := model.DNSDomain(TEST_DOMAIN)
+	mType := model.REC_MX
+	mName := model.DNSRecordName("test-mx._test")
+	mRecs := []model.DNSRecord{
+		{
+			Name:     "test-mx._test",
+			Type:     "MX",
+			Data:     "mx3.test.com",
+			TTL:      3600,
+			Priority: 30,
+		}, {
+			Name:     "test-mx._test",
+			Type:     "MX",
+			Data:     "mx1.test.com",
+			TTL:      3600,
+			Priority: 10,
+		},
+	}
+	mUpdates := []model.DNSRecord{
+		{
+			Data:     "mx3.test.com",
+			TTL:      3600,
+			Priority: 30,
+		}, {
+			Data:     "mx2.test.com",
+			TTL:      3600,
+			Priority: 10,
+		},
+	}
+
+	// add record, read it back
+	mockClientAdd := model.NewMockDNSApiClient(t)
+	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecs[1:2]).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil)
+
+	// read, update, then delete
+	mockClientUpd := model.NewMockDNSApiClient(t)
+	mRecsUpdated := slices.Clone(mRecs)
+	mRecsUpdated[1].Data = "mx2.test.com"
+	// read + update
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Twice()
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mUpdates).Return(nil).Once()
+	// cleanup: delete by setting it back
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Twice()
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mUpdates[:1]).Return(nil).Once()
+
+	resource.UnitTest(t, resource.TestCase{
+		// ProtoV6ProviderFactories: testProviderFactory,
+		Steps: []resource.TestStep{
+			// create, read back
+			{
+				// alt: ConfigFile or ConfigDirectory
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
+				Config:                   simpleResourceConfig("MX", "mx1.test.com"),
+			},
+			// read back, delete (must be noop because already gone)
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
+				Config:                   simpleResourceConfig("MX", "mx2.test.com"),
+			},
+		},
+	})
+}
+
 // check for NOOP if delete is performed on resource that is gone already
 func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 	resourceName := "godaddy-dns_record.test-mx"
@@ -58,7 +125,6 @@ func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 	}
 
 	// add record, read it back
-	// also: calls DelRecord if step fails, mb add it as optional
 	mockClientAdd := model.NewMockDNSApiClient(t)
 	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRecs[:1]).Return(nil).Once()
 	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil)

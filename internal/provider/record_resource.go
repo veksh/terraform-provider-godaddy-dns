@@ -386,6 +386,11 @@ var errRecordGone = errors.New("record already gone")
 // during update/delete ops on target record
 func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecord) ([]model.DNSRecord, error) {
 	// records may differ in data or value; should be present in current API reply
+
+	ctx = tflog.SetField(ctx, "operation", "read-keep")
+	tflog.Info(ctx, "recs-to-keep: start")
+	defer tflog.Info(ctx, "recs-to-keep: end")
+
 	res := []model.DNSRecord{}
 	matchesWithState := 0
 	apiDomain, apiRecState := tf2model(stateData)
