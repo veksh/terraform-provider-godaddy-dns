@@ -51,7 +51,7 @@ func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 		Type:     "MX",
 		Data:     "mx1.test.com",
 		TTL:      3600,
-		Priority: 10,
+		Priority: 0,
 	}}
 
 	// add record, read it back
@@ -60,18 +60,14 @@ func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRec).Return(nil).Once()
 	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
 
-	// read, skip update because it is ok already, clean up
-	// also: must skip update if already ok
-	mockClientUpd := model.NewMockDNSApiClient(t)
+	// read, skip delete because record is already gone
+	mockClientDel := model.NewMockDNSApiClient(t)
 	mockRecUpdated := slices.Clone(mockRec)
-	mockRecUpdated[0].Data = "ns2.test.com"
-	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
-	// no need for update: already ok
-	// mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
-	// same thing with delete
-	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
-	mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
+	mockRecUpdated[0].Data = "mx2.test.com"
+	// need to return it 2 times: 1st for read (refresh), 2nd for delete (keeping recs)
+	mockClientDel.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
+	// no need to call set or del: record already gone
+	// mockClientDel.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
@@ -80,37 +76,18 @@ func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   simpleResourceConfig("NS", "ns1.test.com"),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"type",
-						"NS"),
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"name",
-						"test-ns._test"),
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"data",
-						"ns1.test.com"),
-				),
+				Config:                   simpleResourceConfig("MX", "mx1.test.com"),
 			},
-			// update, read back, clean up
+			// read back, delete (must be noop because already gone)
 			{
-				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   simpleResourceConfig("NS", "ns2.test.com"),
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientDel),
+				Config:                   simpleResourceConfig("MX", "mx1.test.com"),
+				Destroy:                  true,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionDestroy),
 					},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"data",
-						"ns2.test.com"),
-				),
 			},
 		},
 	})

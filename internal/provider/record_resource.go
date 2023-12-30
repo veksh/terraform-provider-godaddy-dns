@@ -265,7 +265,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 			return
 		}
 		apiUpdateRecs, err = r.apiRecsToKeep(ctx, stateData)
-		if err != nil {
+		if err != nil && err != errRecordGone {
 			resp.Diagnostics.AddError("Client Error",
 				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
 			return
@@ -327,9 +327,14 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		}
 		apiRecsToKeep, err := r.apiRecsToKeep(ctx, stateData)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error",
-				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
-			return
+			if err == errRecordGone {
+				tflog.Info(ctx, "DNS record already gone")
+				return
+			} else {
+				resp.Diagnostics.AddError("Client Error",
+					fmt.Sprintf("Getting DNS records to keep failed: %s", err))
+				return
+			}
 		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiRecsToKeep)))
 		if len(apiRecsToKeep) == 0 {
@@ -371,6 +376,8 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	}
 }
 
+var errRecordGone = errors.New("record already gone")
+
 // get all records for type + name, return all of them except the record
 // matching stateData (it will be deleted or updated), converted to update
 // format (without type and name); these are intended to be kept unchanged
@@ -378,22 +385,23 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecord) ([]model.DNSRecord, error) {
 	// records may differ in data or value; should be present in current API reply
 	res := []model.DNSRecord{}
+	matchesWithState := 0
 	apiDomain, apiRecState := tf2model(stateData)
 	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
 	if err != nil {
 		return res, errors.Wrap(err, "Client error: query failed")
 	}
 	if numRecs := len(apiAllRecs); numRecs == 0 {
+		// strange but quite ok for both delete (NOOP) and update (keep nothing)
 		tflog.Warn(ctx, "API returned no records, will continue")
 	} else {
 		tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
-		numFound := 0
 		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx,
 				fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
 			if rec.SameKey(apiRecState) {
 				tflog.Debug(ctx, "Matching DNS record found")
-				numFound += 1
+				matchesWithState += 1
 			} else {
 				// convert to update format
 				rec.Name = ""
@@ -401,11 +409,13 @@ func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecor
 				res = append(res, rec)
 			}
 		}
-		if numFound != 1 {
-			tflog.Warn(ctx,
-				fmt.Sprintf("Reading DNS records: want == 1 record, got %d", numFound))
-		}
 		tflog.Info(ctx, fmt.Sprintf("Found %d records to keep", len(res)))
+	}
+	if matchesWithState != 1 {
+		tflog.Warn(ctx, fmt.Sprintf("Reading DNS records: want == 1 record, got %d", matchesWithState))
+		if matchesWithState == 0 {
+			return res, errRecordGone
+		}
 	}
 	return res, nil
 }
