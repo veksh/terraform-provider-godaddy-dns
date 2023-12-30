@@ -41,23 +41,31 @@ func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 	mockDom := model.DNSDomain(TEST_DOMAIN)
 	mockRType := model.REC_MX
 	mockRName := model.DNSRecordName("test-mx._test")
-	mockRec := []model.DNSRecord{{
-		Name:     "test-mx._test",
-		Type:     "MX",
-		Data:     "mx1.test.com",
-		TTL:      3600,
-		Priority: 0,
-	}}
+	mockRecs := []model.DNSRecord{
+		{
+			Name:     "test-mx._test",
+			Type:     "MX",
+			Data:     "mx1.test.com",
+			TTL:      3600,
+			Priority: 10,
+		}, {
+			Name:     "test-mx._test",
+			Type:     "MX",
+			Data:     "mx3.test.com",
+			TTL:      3600,
+			Priority: 30,
+		},
+	}
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
 	mockClientAdd := model.NewMockDNSApiClient(t)
-	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRec).Return(nil).Once()
-	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
+	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRecs[:1]).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecs, nil)
 
 	// read, skip delete because record is already gone
 	mockClientDel := model.NewMockDNSApiClient(t)
-	mockRecUpdated := slices.Clone(mockRec)
+	mockRecUpdated := slices.Clone(mockRecs)
 	mockRecUpdated[0].Data = "mx2.test.com"
 	// need to return it 2 times: 1st for read (refresh), 2nd for delete (keeping recs)
 	mockClientDel.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
@@ -661,7 +669,7 @@ func simpleResourceConfig(rectype string, target string) string {
 		-1,
 	}
 	if rectype == "MX" {
-		resConf.Priority = 0
+		resConf.Priority = 10
 	}
 	err = tmpl.ExecuteTemplate(&buff, "config", resConf)
 	if err != nil {
