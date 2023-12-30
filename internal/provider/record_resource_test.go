@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -37,6 +38,83 @@ import (
 )
 
 const TEST_DOMAIN = "veksh.in"
+
+// check that if delete is performed on resource that is gone it is NOOP
+func TestUnitMXResourceNoDelIfGone(t *testing.T) {
+	resourceName := "godaddy-dns_record.test-mx"
+	mockCtx := mock.AnythingOfType("*context.valueCtx")
+	mockDom := model.DNSDomain(TEST_DOMAIN)
+	mockRType := model.REC_MX
+	mockRName := model.DNSRecordName("test-mx._test")
+	mockRec := []model.DNSRecord{{
+		Name:     "test-mx._test",
+		Type:     "MX",
+		Data:     "mx1.test.com",
+		TTL:      3600,
+		Priority: 10,
+	}}
+
+	// add record, read it back
+	// also: calls DelRecord if step fails, mb add it as optional
+	mockClientAdd := model.NewMockDNSApiClient(t)
+	mockClientAdd.EXPECT().AddRecords(mockCtx, mockDom, mockRec).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
+
+	// read, skip update because it is ok already, clean up
+	// also: must skip update if already ok
+	mockClientUpd := model.NewMockDNSApiClient(t)
+	mockRecUpdated := slices.Clone(mockRec)
+	mockRecUpdated[0].Data = "ns2.test.com"
+	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
+	// no need for update: already ok
+	// mockClientUpd.EXPECT().SetRecords(mockCtx, mockDom, mockRType, mockRName, rec2set).Return(nil).Once()
+	// same thing with delete
+	mockClientUpd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRecUpdated, nil).Times(2)
+	mockClientUpd.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
+
+	resource.UnitTest(t, resource.TestCase{
+		// ProtoV6ProviderFactories: testProviderFactory,
+		Steps: []resource.TestStep{
+			// create, read back
+			{
+				// alt: ConfigFile or ConfigDirectory
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
+				Config:                   simpleResourceConfig("NS", "ns1.test.com"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"type",
+						"NS"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"name",
+						"test-ns._test"),
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"ns1.test.com"),
+				),
+			},
+			// update, read back, clean up
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
+				Config:                   simpleResourceConfig("NS", "ns2.test.com"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"ns2.test.com"),
+				),
+			},
+		},
+	})
+}
 
 // check that if remote API state is already ok on plan application and no modification
 // is required (e.g. after external change to the resource), no API modification calls
@@ -62,7 +140,6 @@ func TestUnitNSResourceNoModIfOk(t *testing.T) {
 	mockClientAdd.EXPECT().GetRecords(mockCtx, mockDom, mockRType, mockRName).Return(mockRec, nil)
 
 	// read, skip update because it is ok already, clean up
-	// also: must skip update if already ok
 	mockClientUpd := model.NewMockDNSApiClient(t)
 	mockRecUpdated := slices.Clone(mockRec)
 	mockRecUpdated[0].Data = "ns2.test.com"
@@ -199,8 +276,6 @@ func TestAccTXTResource(t *testing.T) {
 // neighbour TXT records with the same name (either already present or
 // appeared after first application)
 func TestUnitTXTResourceWithAnother(t *testing.T) {
-	// TODO
-	// - update if already ok (state is different, but read same record)
 	// common fixtures
 	resourceName := "godaddy-dns_record.test-txt"
 	mockCtx := mock.AnythingOfType("*context.valueCtx")
@@ -582,15 +657,45 @@ func TestAccCnameResource(t *testing.T) {
 }
 
 func simpleResourceConfig(rectype string, target string) string {
-	return fmt.Sprintf(`
+	templateString := `
 	provider "godaddy-dns" {}
-	locals {testdomain = "%s"}
-	resource "godaddy-dns_record" "test-%s" {
-	  domain = "${local.testdomain}"
-	  type   = "%s"
-	  name   = "test-%s._test"
-	  data   = "%s"
-	}`, TEST_DOMAIN, strings.ToLower(rectype), rectype, strings.ToLower(rectype), target)
+	resource "godaddy-dns_record" "test-{{ .RecType | lower }}" {
+	  domain = "{{ .Domain }}"
+	  type   = "{{ .RecType | upper }}"
+	  name   = "test-{{ .RecType | lower }}._test"
+	  data   = "{{ .RecData }}"
+	  {{ if gt .Priority -1 }}
+	  priority = {{ .Priority }}
+	  {{ end}}
+	}`
+	funcMap := template.FuncMap{
+		"lower": strings.ToLower,
+		"upper": strings.ToUpper,
+	}
+	tmpl, err := template.New("config").Funcs(funcMap).Parse(templateString)
+	if err != nil {
+		return err.Error()
+	}
+	var buff strings.Builder
+	resConf := struct {
+		Domain   string
+		RecType  string
+		RecData  string
+		Priority int
+	}{
+		TEST_DOMAIN,
+		rectype,
+		target,
+		-1,
+	}
+	if rectype == "MX" {
+		resConf.Priority = 0
+	}
+	err = tmpl.ExecuteTemplate(&buff, "config", resConf)
+	if err != nil {
+		return err.Error()
+	}
+	return buff.String()
 }
 
 func CheckApiRecordMach(resourceName string, apiClient *client.Client) resource.TestCheckFunc {

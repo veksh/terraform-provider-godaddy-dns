@@ -16,7 +16,7 @@ locals {
       type = "MX",
       name = "_test-cli",
       data = "mx1.pseudo.com",
-      prio = 10,
+      # prio = 10,
     },
     "txt" = {
       type = "TXT",
