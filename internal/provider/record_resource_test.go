@@ -6,11 +6,6 @@ package provider
 // sadly, terraform framework hangs when mock calls t.FailNow(), so short timeout
 // is essential, especially for automated tests
 
-// todo
-// - ensure that externally-deleted resource is processed OK and doing NOOP
-// - check composite handling (`several_records` from examples)
-// - have basic test for MX'es (preferrable a pair of them + some pre-existing)
-
 // also: plan checks in steps: https://developer.hashicorp.com/terraform/plugin/testing/acceptance-tests/plan-checks
 //   ConfigPlanChecks: resource.ConfigPlanChecks{
 //     PreApply: []plancheck.PlanCheck{
@@ -39,7 +34,7 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
-// check that if delete is performed on resource that is gone it is NOOP
+// check for NOOP if delete is performed on resource that is gone already
 func TestUnitMXResourceNoDelIfGone(t *testing.T) {
 	resourceName := "godaddy-dns_record.test-mx"
 	mockCtx := mock.AnythingOfType("*context.valueCtx")
