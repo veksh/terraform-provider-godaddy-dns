@@ -34,6 +34,77 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
+// simple acceptance test for MX resource, with pre-existing one
+func TestAccMXResource(t *testing.T) {
+
+	// client does not complain on empty key/secret if not used
+	apiClient, err := client.NewClient(
+		GODADDY_API_URL,
+		os.Getenv("GODADDY_API_KEY"),
+		os.Getenv("GODADDY_API_SECRET"))
+	assert.Nil(t, err, "cannot create client")
+
+	resourceName := "godaddy-dns_record.test-mx"
+	resourceRDN := model.DNSRecordName("test-mx._test")
+	preExisting := []model.DNSRecord{{
+		Name:     resourceRDN,
+		Type:     "MX",
+		Data:     "mx2.test.com",
+		Priority: 20,
+		TTL:      3210,
+	}}
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, preExisting)
+			// ignore error: ok to be left over from previous test
+		},
+		CheckDestroy: func(*terraform.State) error {
+			var recs []model.DNSRecord
+			recs, err := apiClient.GetRecords(context.Background(),
+				TEST_DOMAIN, model.REC_MX, resourceRDN)
+			if err == nil {
+				if len(recs) == 0 {
+					return fmt.Errorf("too much cleanup: old record did not survive")
+				}
+				if len(recs) > 1 {
+					return fmt.Errorf("too many records left")
+				}
+				if recs[0] != preExisting[0] {
+					return fmt.Errorf("unexpectd modification to an old record: want %v got %v", preExisting[0], recs[0])
+				}
+				err = apiClient.DelRecords(context.Background(),
+					TEST_DOMAIN, model.REC_MX, resourceRDN)
+			}
+			return err
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// create + read back
+			{
+				Config: simpleResourceConfig("MX", "mx1.test.com"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"mx1.test.com"),
+					CheckApiRecordMach(resourceName, apiClient),
+				),
+			},
+			// update + read back, then destroy
+			{
+				Config: simpleResourceConfig("MX", "mx1-new.test.com"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						resourceName,
+						"data",
+						"mx1-new.test.com"),
+					CheckApiRecordMach(resourceName, apiClient),
+				),
+			},
+		},
+	})
+}
+
 // simple MX resource lifecycle
 func TestUnitMXResourceLifecycle(t *testing.T) {
 	mCtx := mock.AnythingOfType("*context.valueCtx")
