@@ -154,6 +154,8 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	ctx = setLogCtx(ctx, planData, "create")
+	tflog.Info(ctx, "create: start")
+	defer tflog.Info(ctx, "create: end")
 
 	apiDomain, apiRecPlan := tf2model(planData)
 	// add: does not check (read) if creating w/o prior state
@@ -167,8 +169,6 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	tflog.Info(ctx, "DNS record created")
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
 
@@ -180,6 +180,8 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 
 	ctx = setLogCtx(ctx, stateData, "read")
+	tflog.Info(ctx, "read: start")
+	defer tflog.Info(ctx, "read: end")
 
 	apiDomain, apiRecState := tf2model(stateData)
 
@@ -233,8 +235,6 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		}
 	}
 
-	tflog.Info(ctx, "DNS records read")
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
 }
 
@@ -246,6 +246,8 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	ctx = setLogCtx(ctx, planData, "update")
+	tflog.Info(ctx, "update: start")
+	defer tflog.Info(ctx, "update: end")
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
@@ -281,7 +283,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 			Priority: apiRecPlan.Priority,
 		}
 		if slices.Index(apiUpdateRecs, ourRec) >= 0 {
-			tflog.Info(ctx, "Record is already present, nothing to do")
+			tflog.Info(ctx, "Record is already present, nothing to do: done")
 			err = nil
 		} else {
 			apiUpdateRecs = append(apiUpdateRecs, ourRec)
@@ -295,8 +297,6 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	tflog.Info(ctx, "DNS record updated")
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &planData)...)
 }
 
@@ -308,7 +308,8 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	ctx = setLogCtx(ctx, stateData, "delete")
+	ctx = setLogCtx(ctx, stateData, "delete: start")
+	defer tflog.Info(ctx, "delete: end")
 
 	apiDomain, apiRecState := tf2model(stateData)
 
@@ -350,7 +351,6 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return
 		}
 	}
-	tflog.Info(ctx, "DNS record deleted")
 }
 
 // terraform import godaddy-dns_record.new-cname domain:CNAME:_test:testing.com
@@ -397,7 +397,7 @@ func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecor
 		// strange but quite ok for both delete (NOOP) and update (keep nothing)
 		tflog.Warn(ctx, "API returned no records, will continue")
 	} else {
-		tflog.Info(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
+		tflog.Debug(ctx, fmt.Sprintf("Got %d answers from API", numRecs))
 		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx,
 				fmt.Sprintf("Got DNS RR: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
@@ -411,7 +411,7 @@ func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecor
 				res = append(res, rec)
 			}
 		}
-		tflog.Info(ctx, fmt.Sprintf("Found %d records to keep", len(res)))
+		tflog.Debug(ctx, fmt.Sprintf("Found %d records to keep", len(res)))
 	}
 	if matchesWithState != 1 {
 		tflog.Warn(ctx, fmt.Sprintf("Reading DNS records: want == 1 record, got %d", matchesWithState))
