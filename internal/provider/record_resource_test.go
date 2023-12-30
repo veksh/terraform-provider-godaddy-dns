@@ -11,6 +11,13 @@ package provider
 // - check composite handling (`several_records` from examples)
 // - have basic test for MX'es (preferrable a pair of them + some pre-existing)
 
+// also: plan checks in steps: https://developer.hashicorp.com/terraform/plugin/testing/acceptance-tests/plan-checks
+//   ConfigPlanChecks: resource.ConfigPlanChecks{
+//     PreApply: []plancheck.PlanCheck{
+//       plancheck.ExpectEmptyPlan(),  // or coversely ExpectNonEmptyPlan()
+//     },
+//   },
+
 import (
 	"context"
 	"fmt"
@@ -20,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +39,8 @@ import (
 const TEST_DOMAIN = "veksh.in"
 
 // check that if remote API state is already ok on plan application and no modification
-// is required (e.g. after external change to the resource) it will actually be skipped
+// is required (e.g. after external change to the resource), no API modification calls
+// will be made (although plan will not be empty)
 func TestUnitNSResourceNoModIfOk(t *testing.T) {
 	// common fixtures
 	resourceName := "godaddy-dns_record.test-ns"
@@ -92,6 +101,11 @@ func TestUnitNSResourceNoModIfOk(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
 				Config:                   simpleResourceConfig("NS", "ns2.test.com"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						resourceName,
