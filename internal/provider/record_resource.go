@@ -85,8 +85,10 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "type: A, CNAME etc",
 				Required:            true,
 				Validators: []validator.String{
-					// TODO: implement SRV management :)
+					// TODO: SRV management
+					// TODO: custom validator to require "priority" for type == MX
 					stringvalidator.Any(
+						// attempt to require priority only for MX: error message is not quite clear :)
 						stringvalidator.OneOf([]string{"A", "AAAA", "CNAME", "NS", "TXT"}...),
 						stringvalidator.All(
 							// mx requires priority
