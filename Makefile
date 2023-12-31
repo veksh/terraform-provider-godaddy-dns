@@ -1,5 +1,5 @@
 default: build
-.PHONY: build test docs testacc
+.PHONY: build test testacc docs local
 
 PROJ := "godaddy-dns"
 ORG := "veksh"
@@ -16,17 +16,18 @@ LOCAL_PATH := "~/.terraform.d/plugins/registry.terraform.io/$(ORG)/$(PROJ)/$(VER
 export
 
 ## cmds
+
 build:
 	go build -o bin/$(BINARY) -ldflags='-s -w -X main.version=$(VERSION)' .
 
 test:
-	go test -v -timeout=120s -parallel=4 ./...
+	go test -v -timeout=30s -parallel=4 ./...
 
 testacc:
-	TF_ACC=1 go test -v -timeout 10m ./...
+	TF_ACC=1 go test -v -timeout 2m ./...
 
 docs:
-	cd tools; go generate ./...
+	cd tools; go generate ./...; cd ..
 
 local: build
 	go build -o $(BINARY) -ldflags='-s -w -X main.version=$(VERSION)' .

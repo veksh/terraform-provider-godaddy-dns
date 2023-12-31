@@ -4,8 +4,12 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"os"
 	"strings"
+	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/pkg/errors"
@@ -15,7 +19,36 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
-// make standard dns record name and terraform resource name out of record type
+// common pre-checks for all acceptance tests: for now, check env secrets presence
+func testAccPreCheck(t *testing.T) {
+	if os.Getenv("GODADDY_API_KEY") == "" || os.Getenv("GODADDY_API_SECRET") == "" {
+		t.Fatal("env vars GODADDY_API_KEY and GODADDY_API_SECRET must be set")
+	}
+}
+
+// provider instantiation for acceptance tests: use real API
+var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+	// pass "test" as version to the provider constructor
+	"godaddy-dns": providerserver.NewProtocol6WithError(New(
+		"test",
+		func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+			return client.NewClient(apiURL, apiKey, apiSecret)
+		})()),
+}
+
+// provider instantiation for unit tests: use mock API
+func mockClientProviderFactory(c *model.MockDNSApiClient) map[string]func() (tfprotov6.ProviderServer, error) {
+	return map[string]func() (tfprotov6.ProviderServer, error){
+		// pass "unittest" as version to the provider constructor
+		"godaddy-dns": providerserver.NewProtocol6WithError(New(
+			"unittest",
+			func(apiURL, apiKey, apiSecret string) (model.DNSApiClient, error) {
+				return model.DNSApiClient(c), nil
+			})()),
+	}
+}
+
+// make record name, test record and terraform resource name for record type
 func makeMockRec(mType model.DNSRecordType, mData model.DNSRecordData) (model.DNSRecordType, model.DNSRecordName, []model.DNSRecord, string) {
 	mName := model.DNSRecordName("test-" + strings.ToLower(string(mType)) + "._test")
 	mRec := []model.DNSRecord{{
@@ -31,6 +64,7 @@ func makeMockRec(mType model.DNSRecordType, mData model.DNSRecordData) (model.DN
 	return mType, mName, mRec, tfResName
 }
 
+// create standard terraform config for test record of given type
 func simpleResourceConfig(rectype model.DNSRecordType, target model.DNSRecordData) string {
 	templateString := `
 	provider "godaddy-dns" {}
@@ -73,6 +107,7 @@ func simpleResourceConfig(rectype model.DNSRecordType, target model.DNSRecordDat
 	return buff.String()
 }
 
+// check that actual record (from API query) matches resource state
 func CheckApiRecordMach(resourceName string, apiClient *client.Client) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		attrs := s.Modules[0].Resources[resourceName].Primary.Attributes

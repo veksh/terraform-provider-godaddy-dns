@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	// these will be set by the goreleaser configuration
-	// to appropriate values for the compiled binary.
+	// will be set by the goreleaser
 	// see https://goreleaser.com/cookbooks/using-main.version/
+	// also set to "test" and "unittest" by acceptance and unit tests
 	version string = "dev"
 )
 
