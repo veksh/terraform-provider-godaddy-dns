@@ -222,10 +222,11 @@ func (c Client) SetRecords(ctx context.Context, rDomain model.DNSDomain,
 			Data: string(mr.Data),
 			TTL:  uint32(mr.TTL),
 		}
-		if mr.Type == model.REC_MX || mr.Type == model.REC_SRV {
+		if rType == model.REC_MX {
 			rec.Priority = uint16(mr.Priority)
 		}
-		if mr.Type == model.REC_SRV {
+		if rType == model.REC_SRV {
+			rec.Priority = uint16(mr.Priority)
 			rec.Protocol = string(mr.Protocol)
 			rec.Service = string(mr.Service)
 			rec.Port = uint16(mr.Port)
