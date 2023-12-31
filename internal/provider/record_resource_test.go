@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -38,13 +39,19 @@ var (
 	mDom = model.DNSDomain(TEST_DOMAIN)
 )
 
+// make standard dns record name and terraform resource name out of record type
+func makeTypeName(t model.DNSRecordType) (model.DNSRecordType, model.DNSRecordName, string) {
+	return t,
+		model.DNSRecordName("test-" + strings.ToLower(string(t)) + "._test"),
+		"godaddy-dns_record.test-" + strings.ToLower(string(t))
+}
+
 // simple acceptance test for MX resource, with pre-existing one
 func TestAccMXLifecycle(t *testing.T) {
-	resourceName := "godaddy-dns_record.test-mx"
-	resourceRDN := model.DNSRecordName("test-mx._test")
+	mType, mName, tfResName := makeTypeName(model.REC_MX)
 	preExisting := []model.DNSRecord{{
-		Name:     resourceRDN,
-		Type:     model.REC_MX,
+		Name:     mName,
+		Type:     mType,
 		Data:     "mx2.test.com",
 		Priority: 20,
 		TTL:      3210,
@@ -57,7 +64,7 @@ func TestAccMXLifecycle(t *testing.T) {
 		CheckDestroy: func(*terraform.State) error {
 			var recs []model.DNSRecord
 			recs, err := apiClient.GetRecords(context.Background(),
-				TEST_DOMAIN, model.REC_MX, resourceRDN)
+				TEST_DOMAIN, mType, mName)
 			if err == nil {
 				if len(recs) == 0 {
 					return fmt.Errorf("too much cleanup: old record did not survive")
@@ -69,7 +76,7 @@ func TestAccMXLifecycle(t *testing.T) {
 					return fmt.Errorf("unexpectd modification to an old record: want %v got %v", preExisting[0], recs[0])
 				}
 				err = apiClient.DelRecords(context.Background(),
-					TEST_DOMAIN, model.REC_MX, resourceRDN)
+					TEST_DOMAIN, mType, mName)
 			}
 			return err
 		},
@@ -80,10 +87,10 @@ func TestAccMXLifecycle(t *testing.T) {
 				Config: simpleResourceConfig("MX", "mx1.test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"mx1.test.com"),
-					CheckApiRecordMach(resourceName, apiClient),
+					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
 			// update + read back, then destroy
@@ -91,10 +98,10 @@ func TestAccMXLifecycle(t *testing.T) {
 				Config: simpleResourceConfig("MX", "mx1-new.test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"mx1-new.test.com"),
-					CheckApiRecordMach(resourceName, apiClient),
+					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
 		},
@@ -103,18 +110,17 @@ func TestAccMXLifecycle(t *testing.T) {
 
 // simple MX resource lifecycle
 func TestUnitMXLifecycle(t *testing.T) {
-	mType := model.REC_MX
-	mName := model.DNSRecordName("test-mx._test")
+	mType, mName, _ := makeTypeName(model.REC_MX)
 	mRecs := []model.DNSRecord{
 		{
-			Name:     "test-mx._test",
-			Type:     "MX",
+			Name:     mName,
+			Type:     mType,
 			Data:     "mx3.test.com",
 			TTL:      3600,
 			Priority: 30,
 		}, {
-			Name:     "test-mx._test",
-			Type:     "MX",
+			Name:     mName,
+			Type:     mType,
 			Data:     "mx1.test.com",
 			TTL:      3600,
 			Priority: 10,
@@ -168,19 +174,17 @@ func TestUnitMXLifecycle(t *testing.T) {
 
 // check for NOOP if delete is performed on resource that is gone already
 func TestUnitMXNoopDelIfGone(t *testing.T) {
-	resourceName := "godaddy-dns_record.test-mx"
-	mType := model.REC_MX
-	mName := model.DNSRecordName("test-mx._test")
+	mType, mName, tfResName := makeTypeName(model.REC_MX)
 	mRecs := []model.DNSRecord{
 		{
 			Name:     "test-mx._test",
-			Type:     model.REC_MX,
+			Type:     mType,
 			Data:     "mx1.test.com",
 			TTL:      3600,
 			Priority: 10,
 		}, {
 			Name:     "test-mx._test",
-			Type:     model.REC_MX,
+			Type:     mType,
 			Data:     "mx3.test.com",
 			TTL:      3600,
 			Priority: 30,
@@ -217,7 +221,7 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 				Destroy:                  true,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionDestroy),
+						plancheck.ExpectResourceAction(tfResName, plancheck.ResourceActionDestroy),
 					},
 				},
 			},
@@ -229,13 +233,10 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 // is required (e.g. after external change to the resource), no API modification calls
 // will be made (although plan will not be empty)
 func TestUnitNSNoopModIfOk(t *testing.T) {
-	// common fixtures
-	resourceName := "godaddy-dns_record.test-ns"
-	mType := model.REC_NS
-	mName := model.DNSRecordName("test-ns._test")
+	mType, mName, tfResName := makeTypeName(model.REC_NS)
 	mRecs := []model.DNSRecord{{
-		Name: "test-ns._test",
-		Type: model.REC_NS,
+		Name: mName,
+		Type: mType,
 		Data: "ns1.test.com",
 		TTL:  3600,
 	}}
@@ -268,7 +269,7 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 				Config:                   simpleResourceConfig("NS", "ns1.test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"ns1.test.com"),
 				),
@@ -279,12 +280,12 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 				Config:                   simpleResourceConfig("NS", "ns2.test.com"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction(tfResName, plancheck.ResourceActionUpdate),
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"ns2.test.com"),
 				),
@@ -296,13 +297,12 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 // test that modifications to TXT record are not affecting another TXT records
 // with the same name (by pre-creating one and checking it is ok afterwards)
 func TestAccTXTLifecycle(t *testing.T) {
-
-	resourceName := "godaddy-dns_record.test-txt"
+	mType, mName, tfResName := makeTypeName(model.REC_TXT)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			rec := []model.DNSRecord{{
-				Name: "test-txt._test",
-				Type: model.REC_TXT,
+				Name: mName,
+				Type: mType,
 				Data: "not to be modified",
 				TTL:  600,
 			}}
@@ -312,7 +312,7 @@ func TestAccTXTLifecycle(t *testing.T) {
 		CheckDestroy: func(*terraform.State) error {
 			var recs []model.DNSRecord
 			recs, err := apiClient.GetRecords(context.Background(),
-				TEST_DOMAIN, model.REC_TXT, "test-txt._test")
+				TEST_DOMAIN, mType, mName)
 			if err == nil {
 				if len(recs) == 0 {
 					return fmt.Errorf("too much cleanup: old record did not survive")
@@ -324,7 +324,7 @@ func TestAccTXTLifecycle(t *testing.T) {
 					return fmt.Errorf("unexpectd modification to an old record")
 				}
 				err = apiClient.DelRecords(context.Background(),
-					TEST_DOMAIN, model.REC_TXT, "test-txt._test")
+					TEST_DOMAIN, mType, mName)
 			}
 			return err
 		},
@@ -336,18 +336,10 @@ func TestAccTXTLifecycle(t *testing.T) {
 				Config: simpleResourceConfig("TXT", "test text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
-						"type",
-						"TXT"),
-					resource.TestCheckResourceAttr(
-						resourceName,
-						"name",
-						"test-txt._test"),
-					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"test text"),
-					CheckApiRecordMach(resourceName, apiClient),
+					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
 			// update + read back
@@ -355,7 +347,7 @@ func TestAccTXTLifecycle(t *testing.T) {
 				Config: simpleResourceConfig("TXT", "updated text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"updated text"),
 				),
@@ -368,24 +360,21 @@ func TestAccTXTLifecycle(t *testing.T) {
 // neighbour TXT records with the same name (either already present or
 // appeared after first application)
 func TestUnitTXTWithAnother(t *testing.T) {
-	// common fixtures
-	resourceName := "godaddy-dns_record.test-txt"
-	mType := model.REC_TXT
-	mName := model.DNSRecordName("test-txt._test")
+	mType, mName, tfResName := makeTypeName(model.REC_TXT)
 	mRec := model.DNSRecord{
-		Name: "test-txt._test",
-		Type: model.REC_TXT,
+		Name: mName,
+		Type: mType,
 		Data: "test text",
 		TTL:  3600}
 	mRecAnother := model.DNSRecord{
-		Name: "test-txt._test",
-		Type: model.REC_TXT,
+		Name: mName,
+		Type: mType,
 		Data: "do not modify",
 		TTL:  600}
 	mRecs := []model.DNSRecord{mRec, mRecAnother}
 	mRecYetAnother := model.DNSRecord{
-		Name: "test-txt._test",
-		Type: model.REC_TXT,
+		Name: mName,
+		Type: mType,
 		Data: "also appears",
 		TTL:  7200}
 
@@ -431,7 +420,7 @@ func TestUnitTXTWithAnother(t *testing.T) {
 				Config:                   simpleResourceConfig("TXT", "test text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"test text"),
 				),
@@ -439,11 +428,11 @@ func TestUnitTXTWithAnother(t *testing.T) {
 			// read, compare with saved, should produce no plan
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientImp),
-				ResourceName:             resourceName,
+				ResourceName:             tfResName,
 				ImportState:              true,
 				ImportStateVerify:        true,
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
+					attrs := s.Modules[0].Resources[tfResName].Primary.Attributes
 					return fmt.Sprintf("%s:%s:%s:%s",
 						attrs["domain"], attrs["type"], attrs["name"], attrs["data"]), nil
 				},
@@ -452,7 +441,7 @@ func TestUnitTXTWithAnother(t *testing.T) {
 			// read, compare with saved, should produce update plan
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientRef),
-				ResourceName:             resourceName,
+				ResourceName:             tfResName,
 				RefreshState:             true,
 				ExpectNonEmptyPlan:       true,
 			},
@@ -462,7 +451,7 @@ func TestUnitTXTWithAnother(t *testing.T) {
 				Config:                   simpleResourceConfig("TXT", "updated text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"updated text"),
 				),
@@ -473,13 +462,10 @@ func TestUnitTXTWithAnother(t *testing.T) {
 
 // simple unit test for CRUD of TXT record (alone)
 func TestUnitTXTLifecycle(t *testing.T) {
-	// common fixtures
-	resourceName := "godaddy-dns_record.test-txt"
-	mType := model.REC_TXT
-	mName := model.DNSRecordName("test-txt._test")
+	mType, mName, tfResName := makeTypeName(model.REC_MX)
 	mRecs := []model.DNSRecord{{
-		Name: "test-txt._test",
-		Type: model.REC_TXT,
+		Name: mName,
+		Type: mType,
 		Data: "test text",
 		TTL:  3600,
 	}}
@@ -524,7 +510,7 @@ func TestUnitTXTLifecycle(t *testing.T) {
 				Config:                   simpleResourceConfig("TXT", "test text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"test text"),
 				),
@@ -532,11 +518,11 @@ func TestUnitTXTLifecycle(t *testing.T) {
 			// read, compare with saved, should produce no plan
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientImp),
-				ResourceName:             resourceName,
+				ResourceName:             tfResName,
 				ImportState:              true,
 				ImportStateVerify:        true,
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
+					attrs := s.Modules[0].Resources[tfResName].Primary.Attributes
 					return fmt.Sprintf("%s:%s:%s:%s",
 						attrs["domain"], attrs["type"], attrs["name"], attrs["data"]), nil
 				},
@@ -545,7 +531,7 @@ func TestUnitTXTLifecycle(t *testing.T) {
 			// read, compare with saved, should produce update plan
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientRef),
-				ResourceName:             resourceName,
+				ResourceName:             tfResName,
 				RefreshState:             true,
 				ExpectNonEmptyPlan:       true,
 			},
@@ -555,7 +541,7 @@ func TestUnitTXTLifecycle(t *testing.T) {
 				Config:                   simpleResourceConfig("TXT", "updated text"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"updated text"),
 				),
@@ -566,13 +552,10 @@ func TestUnitTXTLifecycle(t *testing.T) {
 
 // simple unit test for CRUD of CNAME record
 func TestUnitCnameLifecycle(t *testing.T) {
-	// common fixtures
-	resourceName := "godaddy-dns_record.test-cname"
-	mType := model.REC_CNAME
-	mName := model.DNSRecordName("test-cname._test")
+	mType, mName, tfResName := makeTypeName(model.REC_CNAME)
 	mRecs := []model.DNSRecord{{
-		Name: "test-cname._test",
-		Type: model.REC_CNAME,
+		Name: mName,
+		Type: mType,
 		Data: "testing.com",
 		TTL:  3600,
 	}}
@@ -616,7 +599,7 @@ func TestUnitCnameLifecycle(t *testing.T) {
 				Config:                   simpleResourceConfig("CNAME", "testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"testing.com"),
 				),
@@ -624,11 +607,11 @@ func TestUnitCnameLifecycle(t *testing.T) {
 			// read, compare with saved, should produce no plan
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientImp),
-				ResourceName:             resourceName,
+				ResourceName:             tfResName,
 				ImportState:              true,
 				ImportStateVerify:        true,
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
+					attrs := s.Modules[0].Resources[tfResName].Primary.Attributes
 					return fmt.Sprintf("%s:%s:%s:%s",
 						attrs["domain"], attrs["type"], attrs["name"], attrs["data"]), nil
 				},
@@ -637,7 +620,7 @@ func TestUnitCnameLifecycle(t *testing.T) {
 			// read, compare with saved, should produce update plan
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientRef),
-				ResourceName:             resourceName,
+				ResourceName:             tfResName,
 				RefreshState:             true,
 				ExpectNonEmptyPlan:       true,
 			},
@@ -647,7 +630,7 @@ func TestUnitCnameLifecycle(t *testing.T) {
 				Config:                   simpleResourceConfig("CNAME", "test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"test.com"),
 				),
@@ -658,8 +641,7 @@ func TestUnitCnameLifecycle(t *testing.T) {
 
 // simple acceptance test for CRUD of CNAME record
 func TestAccCnameLifecycle(t *testing.T) {
-
-	resourceName := "godaddy-dns_record.test-cname"
+	tfResName := "godaddy-dns_record.test-cname"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -670,20 +652,20 @@ func TestAccCnameLifecycle(t *testing.T) {
 				Config: simpleResourceConfig("CNAME", "testing.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"testing.com"),
-					CheckApiRecordMach(resourceName, apiClient),
+					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
 			// import state
 			{
-				ResourceName:      resourceName,
+				ResourceName:      tfResName,
 				ImportState:       true,
 				ImportStateVerify: true,
 				// ImportStateId: "veksh.in:CNAME:test-cname._testacc:test.com",
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					attrs := s.Modules[0].Resources[resourceName].Primary.Attributes
+					attrs := s.Modules[0].Resources[tfResName].Primary.Attributes
 					return fmt.Sprintf("%s:%s:%s:%s",
 						attrs["domain"], attrs["type"], attrs["name"], attrs["data"]), nil
 				},
@@ -695,7 +677,7 @@ func TestAccCnameLifecycle(t *testing.T) {
 				Config: simpleResourceConfig("CNAME", "test.com"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						resourceName,
+						tfResName,
 						"data",
 						"test.com"),
 				),
