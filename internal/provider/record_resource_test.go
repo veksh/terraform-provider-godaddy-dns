@@ -40,7 +40,10 @@ var (
 
 // simple acceptance test for MX resource, with pre-existing one
 func TestAccMXLifecycle(t *testing.T) {
-	mType, mName, preExisting, tfResName := makeMockRec(model.REC_MX, "mx2.test.com")
+	mData := model.DNSRecordData("mx1.test.com")
+	mDataOther := model.DNSRecordData("mx2.test.com")
+	mDataChanged := model.DNSRecordData("mx1-new.test.com")
+	mType, mName, preExisting, tfResName := makeMockRec(model.REC_MX, mDataOther)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, preExisting)
@@ -69,23 +72,19 @@ func TestAccMXLifecycle(t *testing.T) {
 		Steps: []resource.TestStep{
 			// create + read back
 			{
-				Config: simpleResourceConfig("MX", "mx1.test.com"),
+				Config: simpleResourceConfig(model.REC_MX, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"mx1.test.com"),
+						tfResName, "data", string(mData)),
 					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
 			// update + read back, then destroy
 			{
-				Config: simpleResourceConfig("MX", "mx1-new.test.com"),
+				Config: simpleResourceConfig(model.REC_MX, mDataChanged),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"mx1-new.test.com"),
+						tfResName, "data", string(mDataChanged)),
 					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
@@ -96,28 +95,31 @@ func TestAccMXLifecycle(t *testing.T) {
 // simple MX resource lifecycle
 func TestUnitMXLifecycle(t *testing.T) {
 	mType, mName, _, _ := makeMockRec(model.REC_MX, "unused")
+	mData := model.DNSRecordData("mx1.test.com")
+	mDataChanged := model.DNSRecordData("mx2.test.com")
+	mDataOther := model.DNSRecordData("mx3.test.com")
 	mRecs := []model.DNSRecord{
 		{
 			Name:     mName,
 			Type:     mType,
-			Data:     "mx3.test.com",
+			Data:     mDataOther,
 			TTL:      3600,
 			Priority: 30,
 		}, {
 			Name:     mName,
 			Type:     mType,
-			Data:     "mx1.test.com",
+			Data:     mData,
 			TTL:      3600,
 			Priority: 10,
 		},
 	}
 	mUpdates := []model.DNSRecord{
 		{
-			Data:     "mx3.test.com",
+			Data:     mDataOther,
 			TTL:      3600,
 			Priority: 30,
 		}, {
-			Data:     "mx2.test.com",
+			Data:     mDataChanged,
 			TTL:      3600,
 			Priority: 10,
 		},
@@ -131,7 +133,7 @@ func TestUnitMXLifecycle(t *testing.T) {
 	// read, update, then delete
 	mockClientUpd := model.NewMockDNSApiClient(t)
 	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[1].Data = "mx2.test.com"
+	mRecsUpdated[1].Data = mDataChanged
 	// read + update
 	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Twice()
 	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mUpdates).Return(nil).Once()
@@ -144,14 +146,13 @@ func TestUnitMXLifecycle(t *testing.T) {
 		Steps: []resource.TestStep{
 			// create, read back
 			{
-				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   simpleResourceConfig("MX", "mx1.test.com"),
+				Config:                   simpleResourceConfig(model.REC_MX, mData),
 			},
 			// read back, delete (must be noop because already gone)
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   simpleResourceConfig("MX", "mx2.test.com"),
+				Config:                   simpleResourceConfig(model.REC_MX, mDataChanged),
 			},
 		},
 	})
@@ -159,22 +160,16 @@ func TestUnitMXLifecycle(t *testing.T) {
 
 // check for NOOP if delete is performed on resource that is gone already
 func TestUnitMXNoopDelIfGone(t *testing.T) {
-	mType, mName, _, tfResName := makeMockRec(model.REC_MX, "unused")
-	mRecs := []model.DNSRecord{
-		{
-			Name:     "test-mx._test",
-			Type:     mType,
-			Data:     "mx1.test.com",
-			TTL:      3600,
-			Priority: 10,
-		}, {
-			Name:     "test-mx._test",
-			Type:     mType,
-			Data:     "mx3.test.com",
-			TTL:      3600,
-			Priority: 30,
-		},
-	}
+	mData := model.DNSRecordData("mx1.test.com")
+	mDataChanged := model.DNSRecordData("mx2.test.com")
+	mDataOther := model.DNSRecordData("mx3.test.com")
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_MX, mData)
+	mRecs = append(mRecs, model.DNSRecord{
+		Name:     mName,
+		Type:     mType,
+		Data:     mDataOther,
+		TTL:      3600,
+		Priority: 30})
 
 	// add record, read it back
 	mClientAdd := model.NewMockDNSApiClient(t)
@@ -184,7 +179,7 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 	// read, skip delete because record is already gone
 	mClientDel := model.NewMockDNSApiClient(t)
 	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[0].Data = "mx2.test.com"
+	mRecsUpdated[0].Data = mDataChanged
 	// need to return it 2 times: 1st for read (refresh), 2nd for delete (keeping recs)
 	mClientDel.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Times(2)
 	// no need to call set or del: record already gone
@@ -197,12 +192,12 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientAdd),
-				Config:                   simpleResourceConfig("MX", "mx1.test.com"),
+				Config:                   simpleResourceConfig(model.REC_MX, mData),
 			},
 			// read back, delete (must be noop because already gone)
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientDel),
-				Config:                   simpleResourceConfig("MX", "mx1.test.com"),
+				Config:                   simpleResourceConfig(model.REC_MX, mData),
 				Destroy:                  true,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -218,7 +213,9 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 // is required (e.g. after external change to the resource), no API modification calls
 // will be made (although plan will not be empty)
 func TestUnitNSNoopModIfOk(t *testing.T) {
-	mType, mName, mRecs, tfResName := makeMockRec(model.REC_NS, "ns1.test.com")
+	mData := model.DNSRecordData("ns1.test.com")
+	mDataChanged := model.DNSRecordData("ns2.test.com")
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_NS, mData)
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
@@ -229,7 +226,7 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 	// read, skip update because it is ok already, clean up
 	mClientUpd := model.NewMockDNSApiClient(t)
 	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[0].Data = "ns2.test.com"
+	mRecsUpdated[0].Data = mDataChanged
 	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
 	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Times(2)
 	// no need for update: already ok
@@ -245,18 +242,15 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientAdd),
-				Config:                   simpleResourceConfig("NS", "ns1.test.com"),
+				Config:                   simpleResourceConfig(model.REC_NS, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"ns1.test.com"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mData)),
 				),
 			},
 			// update, read back, clean up
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientUpd),
-				Config:                   simpleResourceConfig("NS", "ns2.test.com"),
+				Config:                   simpleResourceConfig(model.REC_NS, mDataChanged),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectResourceAction(tfResName, plancheck.ResourceActionUpdate),
@@ -264,9 +258,7 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"ns2.test.com"),
+						tfResName, "data", string(mDataChanged)),
 				),
 			},
 		},
@@ -276,7 +268,10 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 // test that modifications to TXT record are not affecting another TXT records
 // with the same name (by pre-creating one and checking it is ok afterwards)
 func TestAccTXTLifecycle(t *testing.T) {
-	mType, mName, preExisting, tfResName := makeMockRec(model.REC_TXT, "not to be modified")
+	mData := model.DNSRecordData("test text")
+	mDataChanged := model.DNSRecordData("updated text")
+	mDataOther := model.DNSRecordData("not to be modified")
+	mType, mName, preExisting, tfResName := makeMockRec(model.REC_TXT, mDataOther)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, preExisting)
@@ -306,18 +301,15 @@ func TestAccTXTLifecycle(t *testing.T) {
 			// create + read back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				Config: simpleResourceConfig("TXT", "test text"),
+				Config: simpleResourceConfig(model.REC_TXT, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"test text"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mData)),
 					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
 			// update + read back
 			{
-				Config: simpleResourceConfig("TXT", "updated text"),
+				Config: simpleResourceConfig(model.REC_TXT, mDataChanged),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(
 						tfResName,
@@ -333,18 +325,22 @@ func TestAccTXTLifecycle(t *testing.T) {
 // neighbour TXT records with the same name (either already present or
 // appeared after first application)
 func TestUnitTXTWithAnother(t *testing.T) {
-	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, "test text")
+	mData := model.DNSRecordData("test text")
+	mDataChanged := model.DNSRecordData("changed text")
+	mDataOther := model.DNSRecordData("do not modify")
+	mDataYetAnother := model.DNSRecordData("also appears")
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, mData)
 	mRec := mRecs[0]
 	mRecAnother := model.DNSRecord{
 		Name: mName,
 		Type: mType,
-		Data: "do not modify",
+		Data: mDataOther,
 		TTL:  600}
 	mRecs = append(mRecs, mRecAnother)
 	mRecYetAnother := model.DNSRecord{
 		Name: mName,
 		Type: mType,
-		Data: "also appears",
+		Data: mDataYetAnother,
 		TTL:  7200}
 
 	// add record, read it back
@@ -361,17 +357,17 @@ func TestUnitTXTWithAnother(t *testing.T) {
 	// also: tries to destroy refreshed RR if last in pipeline; mostly ok
 	mClientRef := model.NewMockDNSApiClient(t)
 	mRecsRefresh := slices.Clone(mRecs)
-	mRecsRefresh[0].Data = "changed text"
+	mRecsRefresh[0].Data = mDataChanged
 	mClientRef.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsRefresh, nil)
 
 	// read (simulate another record added, and ours still present), update
 	// final step: clean up (not delete but set with 2 remaining records)
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: "do not modify", TTL: 600}, {Data: "updated text", TTL: 3600}}
+	rec2set := []model.DNSRecord{{Data: mDataOther, TTL: 600}, {Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[0].Data = "updated text"
+	mRecsUpdated[0].Data = mDataChanged
 	mRecsUpdated = append(mRecsUpdated, mRecYetAnother)
-	recs2keep := []model.DNSRecord{{Data: "do not modify", TTL: 600}, {Data: "also appears", TTL: 7200}}
+	recs2keep := []model.DNSRecord{{Data: mDataOther, TTL: 600}, {Data: mDataYetAnother, TTL: 7200}}
 	// 2 gets: 1st for read/refresh, 2nd for uptate/find recs to keep
 	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Twice()
 	mClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, rec2set).Return(nil).Once()
@@ -386,12 +382,9 @@ func TestUnitTXTWithAnother(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientAdd),
-				Config:                   simpleResourceConfig("TXT", "test text"),
+				Config:                   simpleResourceConfig(model.REC_TXT, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"test text"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mData)),
 				),
 			},
 			// read, compare with saved, should produce no plan
@@ -417,12 +410,9 @@ func TestUnitTXTWithAnother(t *testing.T) {
 			// update, read back, clean up (keeping others)
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientUpd),
-				Config:                   simpleResourceConfig("TXT", "updated text"),
+				Config:                   simpleResourceConfig(model.REC_TXT, mDataChanged),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"updated text"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mDataChanged)),
 				),
 			},
 		},
@@ -431,7 +421,10 @@ func TestUnitTXTWithAnother(t *testing.T) {
 
 // simple unit test for CRUD of TXT record (alone)
 func TestUnitTXTLifecycle(t *testing.T) {
-	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, "test text")
+	mData := model.DNSRecordData("test text")
+	mDataOther := model.DNSRecordData("do not modify")
+	mDataChanged := model.DNSRecordData("changed text")
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, mData)
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
@@ -447,15 +440,15 @@ func TestUnitTXTLifecycle(t *testing.T) {
 	// also: tries to destroy refreshed RR if last in pipeline; mostly ok
 	mClientRef := model.NewMockDNSApiClient(t)
 	mRecsRefresh := slices.Clone(mRecs)
-	mRecsRefresh[0].Data = "changed text"
+	mRecsRefresh[0].Data = mDataOther
 	mClientRef.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsRefresh, nil)
 
 	// read, update, clean up
 	// also: must skip update if already ok
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: "updated text", TTL: 3600}}
+	rec2set := []model.DNSRecord{{Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[0].Data = "updated text"
+	mRecsUpdated[0].Data = mDataChanged
 	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
 	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Times(2)
 	mClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, rec2set).Return(nil).Once()
@@ -470,12 +463,9 @@ func TestUnitTXTLifecycle(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientAdd),
-				Config:                   simpleResourceConfig("TXT", "test text"),
+				Config:                   simpleResourceConfig(model.REC_TXT, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"test text"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mData)),
 				),
 			},
 			// read, compare with saved, should produce no plan
@@ -501,12 +491,9 @@ func TestUnitTXTLifecycle(t *testing.T) {
 			// update, read back, clean up
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientUpd),
-				Config:                   simpleResourceConfig("TXT", "updated text"),
+				Config:                   simpleResourceConfig(model.REC_TXT, mDataChanged),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"updated text"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mDataChanged)),
 				),
 			},
 		},
@@ -515,7 +502,10 @@ func TestUnitTXTLifecycle(t *testing.T) {
 
 // simple unit test for CRUD of CNAME record
 func TestUnitCnameLifecycle(t *testing.T) {
-	mType, mName, mRecs, tfResName := makeMockRec(model.REC_CNAME, "testing.com")
+	mData := model.DNSRecordData("testing.com")
+	mDataOther := model.DNSRecordData("changed.com")
+	mDataChanged := model.DNSRecordData("test.com")
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_CNAME, mData)
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
@@ -530,15 +520,15 @@ func TestUnitCnameLifecycle(t *testing.T) {
 	// read recod, expect mismatch with saved state
 	mClientRef := model.NewMockDNSApiClient(t)
 	mockRecRef := slices.Clone(mRecs)
-	mockRecRef[0].Data = "changed.com"
+	mockRecRef[0].Data = mDataOther
 	mClientRef.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mockRecRef, nil)
 
 	// read, update, clean up
 	// also: must skip update if already ok
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: "test.com", TTL: 3600}}
+	rec2set := []model.DNSRecord{{Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[0].Data = "test.com"
+	mRecsUpdated[0].Data = mDataChanged
 	// if using same args + "Once": results could vary on 1st and 2nd call
 	// if more than 1 required: .Times(4)
 	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Once()
@@ -553,12 +543,9 @@ func TestUnitCnameLifecycle(t *testing.T) {
 			{
 				// alt: ConfigFile or ConfigDirectory
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientAdd),
-				Config:                   simpleResourceConfig("CNAME", "testing.com"),
+				Config:                   simpleResourceConfig(model.REC_CNAME, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"testing.com"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mData)),
 				),
 			},
 			// read, compare with saved, should produce no plan
@@ -584,12 +571,9 @@ func TestUnitCnameLifecycle(t *testing.T) {
 			// update, read back
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientUpd),
-				Config:                   simpleResourceConfig("CNAME", "test.com"),
+				Config:                   simpleResourceConfig(model.REC_CNAME, mDataChanged),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"test.com"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mDataChanged)),
 				),
 			},
 		},
@@ -598,6 +582,8 @@ func TestUnitCnameLifecycle(t *testing.T) {
 
 // simple acceptance test for CRUD of CNAME record
 func TestAccCnameLifecycle(t *testing.T) {
+	mData := model.DNSRecordData("testing.com")
+	mDataChanged := model.DNSRecordData("test.com")
 	tfResName := "godaddy-dns_record.test-cname"
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -606,12 +592,9 @@ func TestAccCnameLifecycle(t *testing.T) {
 			// create + read back
 			{
 				// alt: ConfigFile or ConfigDirectory
-				Config: simpleResourceConfig("CNAME", "testing.com"),
+				Config: simpleResourceConfig(model.REC_CNAME, mData),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"testing.com"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mData)),
 					CheckApiRecordMach(tfResName, apiClient),
 				),
 			},
@@ -631,12 +614,9 @@ func TestAccCnameLifecycle(t *testing.T) {
 			},
 			// update + read back
 			{
-				Config: simpleResourceConfig("CNAME", "test.com"),
+				Config: simpleResourceConfig(model.REC_CNAME, mDataChanged),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						tfResName,
-						"data",
-						"test.com"),
+					resource.TestCheckResourceAttr(tfResName, "data", string(mDataChanged)),
 				),
 			},
 		},
