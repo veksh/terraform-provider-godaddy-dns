@@ -10,4 +10,5 @@
 
 ## 0.2.0
 
-- unit tests, real api check in acceptance tests
+- lots of unit tests, real api check in acceptance tests
+- support for multi-valued records (MX, TXT, NS)

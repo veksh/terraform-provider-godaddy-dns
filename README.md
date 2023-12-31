@@ -23,11 +23,11 @@ or complain if expecting to manage it fully).
   - alt 2: intercept and mock (gock): also testing http client
   - these really are integration tests: testing http client with mock server
 - [x] add true API checks to integration tests
-- [ ] add more record types
+- [x] add more record types
   - [x] implement record type check; disallow SOA etc
   - [x] TXT: just several
   - [x] NS: just several
-  - [ ] MX: + prio; try multi-record test config with loop
+  - [x] MX: + prio; try multi-record test config with loop
   - mb refuse to mod @ unless GODADDY_ALLOW_ROOTMOD is set?
   - mb SRV: + proto, service, port + prio, weight; mb postpone :)
 - [ ] provide documentation
