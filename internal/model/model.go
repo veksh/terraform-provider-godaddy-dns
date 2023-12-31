@@ -34,10 +34,10 @@ type DNSRecord struct {
 	TTL      DNSRecordTTL  // min 600, def 3600
 	Priority DNSRecordPrio // MX and SRV
 
-	Weight   DNSRecordSRVWeight  // SRV
 	Protocol DNSRecordSRVProto   // SRV: _tcp or _udp
 	Service  DNSRecordSRVService // SRV: like _ldap
 	Port     DNSRecordSRVPort    // SRV, 1-65535
+	Weight   DNSRecordSRVWeight  // SRV
 }
 
 // compare key field to determine if two records refer to the same object

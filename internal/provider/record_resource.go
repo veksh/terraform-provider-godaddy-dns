@@ -210,19 +210,20 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//  - for SRV PK is proto+service+port+data, value is weight+prio+ttl
 		numFound := 0
 		for _, rec := range apiAllRecs {
-			tflog.Debug(ctx, fmt.Sprintf(
-				"Got DNS record: data %s, prio %d, ttl %d", rec.Data, rec.Priority, rec.TTL))
+			tflog.Debug(ctx, fmt.Sprintf("Got DNS record: %v", rec))
+			tflog.Info(ctx, fmt.Sprintf("*** RR: %v", rec))
 			if rec.SameKey(apiRecState) {
 				tflog.Info(ctx, "matching DNS record found")
 				stateData.Data = types.StringValue(string(rec.Data))
 				stateData.TTL = types.Int64Value(int64(rec.TTL))
 				switch rec.Type {
-				case "MX":
+				case model.REC_MX:
 					stateData.Priority = types.Int64Value(int64(rec.Priority))
-				case "SRV":
+				case model.REC_SRV:
 					stateData.Priority = types.Int64Value(int64(rec.Priority))
 					// TODO: weight
 				}
+				tflog.Info(ctx, fmt.Sprintf("*** => state: %v", stateData))
 				numFound += 1
 			}
 		}
@@ -251,6 +252,8 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
+	tflog.Info(ctx, fmt.Sprintf("*** planData %v, recPlan %v", planData, apiRecPlan))
+
 	var err error
 	var apiUpdateRecs []model.DNSRecord
 	if apiRecPlan.Type.IsSingleValue() {
@@ -276,7 +279,6 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
 		// and finally, our record (TODO: SRV has more fields)
-		// TODO: if such record is already exists, do nothing (check in recsToKeep?)
 		ourRec := model.DNSRecord{
 			Data:     apiRecPlan.Data,
 			TTL:      apiRecPlan.TTL,
@@ -288,6 +290,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		} else {
 			apiUpdateRecs = append(apiUpdateRecs, ourRec)
 			err = r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
+			tflog.Info(ctx, fmt.Sprintf("*** update: %v", apiUpdateRecs))
 		}
 	}
 
@@ -344,6 +347,7 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			err = r.client.DelRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
 		} else {
 			err = r.client.SetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name, apiRecsToKeep)
+			tflog.Info(ctx, fmt.Sprintf("*** kept: %v", apiRecsToKeep))
 		}
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error",
