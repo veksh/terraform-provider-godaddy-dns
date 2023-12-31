@@ -32,6 +32,10 @@ resource "godaddy-dns_record" "cname" {
 - `name` (String) name (part of fqdn), may include `.` for sub-domains
 - `type` (String) type: A, CNAME etc
 
+### Optional
+
+- `priority` (Number) Priority for MX and SRV, def 0
+
 ### Read-Only
 
 - `ttl` (Number) TTL, > 600 < 86400, def 3600

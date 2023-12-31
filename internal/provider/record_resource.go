@@ -229,7 +229,7 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 			tflog.Info(ctx, "no matching record found")
 		} else {
 			if numFound > 1 {
-				tflog.Warn(ctx, "more than one maching record found, using last")
+				tflog.Warn(ctx, "more than one matching record found, using last")
 			}
 		}
 	}
