@@ -15,6 +15,22 @@ import (
 
 const TEST_DOMAIN = "veksh.in"
 
+// make standard dns record name and terraform resource name out of record type
+func makeMockRec(mType model.DNSRecordType, data string) (model.DNSRecordType, model.DNSRecordName, []model.DNSRecord, string) {
+	mName := model.DNSRecordName("test-" + strings.ToLower(string(mType)) + "._test")
+	mRec := []model.DNSRecord{{
+		Name: mName,
+		Type: mType,
+		Data: model.DNSRecordData(data),
+		TTL:  3600,
+	}}
+	if mType == model.REC_MX {
+		mRec[0].Priority = 100
+	}
+	tfResName := "godaddy-dns_record.test-" + strings.ToLower(string(mType))
+	return mType, mName, mRec, tfResName
+}
+
 func simpleResourceConfig(rectype string, target string) string {
 	templateString := `
 	provider "godaddy-dns" {}

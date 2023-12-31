@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -39,23 +38,9 @@ var (
 	mDom = model.DNSDomain(TEST_DOMAIN)
 )
 
-// make standard dns record name and terraform resource name out of record type
-func makeTypeName(t model.DNSRecordType) (model.DNSRecordType, model.DNSRecordName, string) {
-	return t,
-		model.DNSRecordName("test-" + strings.ToLower(string(t)) + "._test"),
-		"godaddy-dns_record.test-" + strings.ToLower(string(t))
-}
-
 // simple acceptance test for MX resource, with pre-existing one
 func TestAccMXLifecycle(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_MX)
-	preExisting := []model.DNSRecord{{
-		Name:     mName,
-		Type:     mType,
-		Data:     "mx2.test.com",
-		Priority: 20,
-		TTL:      3210,
-	}}
+	mType, mName, preExisting, tfResName := makeMockRec(model.REC_MX, "mx2.test.com")
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, preExisting)
@@ -110,7 +95,7 @@ func TestAccMXLifecycle(t *testing.T) {
 
 // simple MX resource lifecycle
 func TestUnitMXLifecycle(t *testing.T) {
-	mType, mName, _ := makeTypeName(model.REC_MX)
+	mType, mName, _, _ := makeMockRec(model.REC_MX, "unused")
 	mRecs := []model.DNSRecord{
 		{
 			Name:     mName,
@@ -174,7 +159,7 @@ func TestUnitMXLifecycle(t *testing.T) {
 
 // check for NOOP if delete is performed on resource that is gone already
 func TestUnitMXNoopDelIfGone(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_MX)
+	mType, mName, _, tfResName := makeMockRec(model.REC_MX, "unused")
 	mRecs := []model.DNSRecord{
 		{
 			Name:     "test-mx._test",
@@ -233,13 +218,7 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 // is required (e.g. after external change to the resource), no API modification calls
 // will be made (although plan will not be empty)
 func TestUnitNSNoopModIfOk(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_NS)
-	mRecs := []model.DNSRecord{{
-		Name: mName,
-		Type: mType,
-		Data: "ns1.test.com",
-		TTL:  3600,
-	}}
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_NS, "ns1.test.com")
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
@@ -297,16 +276,10 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 // test that modifications to TXT record are not affecting another TXT records
 // with the same name (by pre-creating one and checking it is ok afterwards)
 func TestAccTXTLifecycle(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_TXT)
+	mType, mName, preExisting, tfResName := makeMockRec(model.REC_TXT, "not to be modified")
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
-			rec := []model.DNSRecord{{
-				Name: mName,
-				Type: mType,
-				Data: "not to be modified",
-				TTL:  600,
-			}}
-			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, rec)
+			_ = apiClient.AddRecords(context.Background(), TEST_DOMAIN, preExisting)
 			// ignore error: ok to be left over from previous test
 		},
 		CheckDestroy: func(*terraform.State) error {
@@ -320,7 +293,7 @@ func TestAccTXTLifecycle(t *testing.T) {
 				if len(recs) > 1 {
 					return fmt.Errorf("too many records left")
 				}
-				if recs[0].Data != "not to be modified" {
+				if recs[0] != preExisting[0] {
 					return fmt.Errorf("unexpectd modification to an old record")
 				}
 				err = apiClient.DelRecords(context.Background(),
@@ -360,18 +333,14 @@ func TestAccTXTLifecycle(t *testing.T) {
 // neighbour TXT records with the same name (either already present or
 // appeared after first application)
 func TestUnitTXTWithAnother(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_TXT)
-	mRec := model.DNSRecord{
-		Name: mName,
-		Type: mType,
-		Data: "test text",
-		TTL:  3600}
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, "test text")
+	mRec := mRecs[0]
 	mRecAnother := model.DNSRecord{
 		Name: mName,
 		Type: mType,
 		Data: "do not modify",
 		TTL:  600}
-	mRecs := []model.DNSRecord{mRec, mRecAnother}
+	mRecs = append(mRecs, mRecAnother)
 	mRecYetAnother := model.DNSRecord{
 		Name: mName,
 		Type: mType,
@@ -462,13 +431,7 @@ func TestUnitTXTWithAnother(t *testing.T) {
 
 // simple unit test for CRUD of TXT record (alone)
 func TestUnitTXTLifecycle(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_MX)
-	mRecs := []model.DNSRecord{{
-		Name: mName,
-		Type: mType,
-		Data: "test text",
-		TTL:  3600,
-	}}
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, "test text")
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
@@ -552,13 +515,7 @@ func TestUnitTXTLifecycle(t *testing.T) {
 
 // simple unit test for CRUD of CNAME record
 func TestUnitCnameLifecycle(t *testing.T) {
-	mType, mName, tfResName := makeTypeName(model.REC_CNAME)
-	mRecs := []model.DNSRecord{{
-		Name: mName,
-		Type: mType,
-		Data: "testing.com",
-		TTL:  3600,
-	}}
+	mType, mName, mRecs, tfResName := makeMockRec(model.REC_CNAME, "testing.com")
 
 	// add record, read it back
 	// also: calls DelRecord if step fails, mb add it as optional
