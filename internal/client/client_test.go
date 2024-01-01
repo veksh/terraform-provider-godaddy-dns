@@ -1,10 +1,11 @@
 package client
 
-// put integration in separate file with // +build integration
+// integration tests: put into a separate file with // +build integration
 // and run go test -v -tags=integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -121,5 +122,52 @@ func TestGetRecords_RateLimit(t *testing.T) {
 	elapsed := time.Since(start)
 	if elapsed < time.Second {
 		t.Error("too little time elapsed for 61 request")
+	}
+}
+
+func TestSetRecords_ProperFormat(t *testing.T) {
+	t.Parallel()
+	ts := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			type updReq struct {
+				Data     string `json:"data"`
+				TTL      int    `json:"ttl"`
+				Priority uint16 `json:"priority"`
+			}
+			expected := []updReq{{"mx1.test.com", 3600, 10}}
+			var req []updReq
+			err := json.NewDecoder(r.Body).Decode(&req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if req[0] != expected[0] {
+				reply := apiErrorResponce{
+					Error: "BAD_FORMAT",
+					Message: fmt.Sprintf("unexpected request: want %v, got %v",
+						expected, req),
+				}
+				jsonData, _ := json.Marshal(&reply)
+				w.WriteHeader(http.StatusExpectationFailed)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(jsonData)
+				return
+			}
+		}))
+	defer ts.Close()
+
+	updRecs := []model.DNSUpdateRecord{{
+		Data:     "mx.test.com",
+		Priority: 10,
+		TTL:      3600,
+	}}
+
+	c, err := NewClient(ts.URL, "dummyAPIKey", "dummyAPISecret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = c.SetRecords(context.Background(), "test.com", model.REC_MX, "@", updRecs)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

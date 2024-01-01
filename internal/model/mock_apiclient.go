@@ -180,7 +180,7 @@ func (_c *MockDNSApiClient_GetRecords_Call) RunAndReturn(run func(context.Contex
 }
 
 // SetRecords provides a mock function with given fields: ctx, domain, rType, rName, records
-func (_m *MockDNSApiClient) SetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSRecord) error {
+func (_m *MockDNSApiClient) SetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSUpdateRecord) error {
 	ret := _m.Called(ctx, domain, rType, rName, records)
 
 	if len(ret) == 0 {
@@ -188,7 +188,7 @@ func (_m *MockDNSApiClient) SetRecords(ctx context.Context, domain DNSDomain, rT
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, DNSDomain, DNSRecordType, DNSRecordName, []DNSRecord) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, DNSDomain, DNSRecordType, DNSRecordName, []DNSUpdateRecord) error); ok {
 		r0 = rf(ctx, domain, rType, rName, records)
 	} else {
 		r0 = ret.Error(0)
@@ -207,14 +207,14 @@ type MockDNSApiClient_SetRecords_Call struct {
 //   - domain DNSDomain
 //   - rType DNSRecordType
 //   - rName DNSRecordName
-//   - records []DNSRecord
+//   - records []DNSUpdateRecord
 func (_e *MockDNSApiClient_Expecter) SetRecords(ctx interface{}, domain interface{}, rType interface{}, rName interface{}, records interface{}) *MockDNSApiClient_SetRecords_Call {
 	return &MockDNSApiClient_SetRecords_Call{Call: _e.mock.On("SetRecords", ctx, domain, rType, rName, records)}
 }
 
-func (_c *MockDNSApiClient_SetRecords_Call) Run(run func(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSRecord)) *MockDNSApiClient_SetRecords_Call {
+func (_c *MockDNSApiClient_SetRecords_Call) Run(run func(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSUpdateRecord)) *MockDNSApiClient_SetRecords_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(DNSDomain), args[2].(DNSRecordType), args[3].(DNSRecordName), args[4].([]DNSRecord))
+		run(args[0].(context.Context), args[1].(DNSDomain), args[2].(DNSRecordType), args[3].(DNSRecordName), args[4].([]DNSUpdateRecord))
 	})
 	return _c
 }
@@ -224,7 +224,7 @@ func (_c *MockDNSApiClient_SetRecords_Call) Return(_a0 error) *MockDNSApiClient_
 	return _c
 }
 
-func (_c *MockDNSApiClient_SetRecords_Call) RunAndReturn(run func(context.Context, DNSDomain, DNSRecordType, DNSRecordName, []DNSRecord) error) *MockDNSApiClient_SetRecords_Call {
+func (_c *MockDNSApiClient_SetRecords_Call) RunAndReturn(run func(context.Context, DNSDomain, DNSRecordType, DNSRecordName, []DNSUpdateRecord) error) *MockDNSApiClient_SetRecords_Call {
 	_c.Call.Return(run)
 	return _c
 }
