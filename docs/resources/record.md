@@ -3,12 +3,12 @@
 page_title: "godaddy-dns_record Resource - terraform-provider-godaddy-dns"
 subcategory: ""
 description: |-
-  DNS resource record
+  DNS resource record, representing a single RR in managed domain
 ---
 
 # godaddy-dns_record (Resource)
 
-DNS resource record
+DNS resource record, representing a single RR in managed domain
 
 ## Example Usage
 
@@ -59,18 +59,15 @@ resource "godaddy-dns_record" "records" {
 
 ### Required
 
-- `data` (String) record value: target for CNAME, ip address for A etc
-- `domain` (String) main managed domain (top-level)
-- `name` (String) name (part of FQN), may include `.` for records in sub-domains
-- `type` (String) type: A, CNAME etc
+- `data` (String) Record value returned for DNS query: target for CNAME, ip address for A etc
+- `domain` (String) Name of main managed domain (top-level) for this RR
+- `name` (String) Record name name (part of FQN), may include `.` for records in sub-domains or be `@` for top-level records
+- `type` (String) Resource record type: A, CNAME etc
 
 ### Optional
 
-- `priority` (Number) Priority for MX
-
-### Read-Only
-
-- `ttl` (Number) TTL, > 600 < 86400, def 3600
+- `priority` (Number) Record priority, used for MX (lower is higher)
+- `ttl` (Number) Record time-to-live, >= 600s < 86400s, default 3600 seconds (1 hour)
 
 ## Import
 

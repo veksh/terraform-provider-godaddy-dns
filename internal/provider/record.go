@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -72,17 +73,17 @@ func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "DNS resource record",
+		MarkdownDescription: "DNS resource record, representing a single RR in managed domain",
 		Attributes: map[string]schema.Attribute{
 			"domain": schema.StringAttribute{
-				MarkdownDescription: "main managed domain (top-level)",
+				MarkdownDescription: "Name of main managed domain (top-level) for this RR",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "type: A, CNAME etc",
+				MarkdownDescription: "Resource record type: A, CNAME etc",
 				Required:            true,
 				Validators: []validator.String{
 					// TODO: SRV management
@@ -104,25 +105,33 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "name (part of FQN), may include `.` for records in sub-domains",
+				MarkdownDescription: "Record name name (part of FQN), may include `.` for records in sub-domains or be `@` for top-level records",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"data": schema.StringAttribute{
-				MarkdownDescription: "record value: target for CNAME, ip address for A etc",
+				MarkdownDescription: "Record value returned for DNS query: target for CNAME, ip address for A etc",
 				Required:            true,
 			},
 			"ttl": schema.Int64Attribute{
-				MarkdownDescription: "TTL, > 600 < 86400, def 3600",
-				Required:            false,
+				MarkdownDescription: "Record time-to-live, >= 600s < 86400s, default 3600 seconds (1 hour)",
+				Optional:            true,
 				Computed:            true, // must be computed to use a default
 				Default:             int64default.StaticInt64(3600),
+				Validators: []validator.Int64{
+					int64validator.AtLeast(600),
+					int64validator.AtMost(86400),
+				},
 			},
 			"priority": schema.Int64Attribute{
-				MarkdownDescription: "Priority for MX",
+				MarkdownDescription: "Record priority, required for MX (lower is higher)",
 				Optional:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(0),
+					int64validator.AtMost(1023),
+				},
 			},
 		},
 	}

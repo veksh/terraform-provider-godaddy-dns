@@ -2,12 +2,12 @@
 page_title: "godaddy-dns_record Resource - terraform-provider-godaddy-dns"
 subcategory: ""
 description: |-
-  DNS resource record
+  DNS resource record, representing a single RR in managed domain
 ---
 
 # godaddy-dns_record (Resource)
 
-DNS resource record
+DNS resource record, representing a single RR in managed domain
 
 ## Example Usage
 
@@ -58,18 +58,15 @@ resource "godaddy-dns_record" "records" {
 
 ### Required
 
-- `data` (String) record value: target for CNAME, ip address for A etc
-- `domain` (String) main managed domain (top-level)
-- `name` (String) name (part of FQN), may include `.` for records in sub-domains
-- `type` (String) type: A, CNAME etc
+- `data` (String) Record value returned for DNS query: target for CNAME, ip address for A etc
+- `domain` (String) Name of main managed domain (top-level) for this RR
+- `name` (String) Record name name (part of FQN), may include `.` for records in sub-domains or be `@` for top-level records
+- `type` (String) Resource record type: A, CNAME etc
 
 ### Optional
 
-- `priority` (Number) Priority for MX
-
-### Read-Only
-
-- `ttl` (Number) TTL, > 600 < 86400, def 3600
+- `priority` (Number) Record priority, used for MX (lower is higher)
+- `ttl` (Number) Record time-to-live, >= 600s < 86400s, default 3600 seconds (1 hour)
 
 ## Import
 
@@ -78,59 +75,3 @@ Import is supported using the id in format `<domain>:<type>:<name>:<data>`:
 ```shell
 terraform import godaddy-dns_record.cname-alias mydom.com:CNAME:alias:test.com
 ```
-
-### Limitations of Import
-
-Any attribute values that are specified within Terraform config will be
-ignored during import and all attributes that have defaults defined within
-the schema will have the default assigned.
-
-For instance, using the following config during import:
-```terraform
-resource "random_string" "test" {
-  length = 16
-  lower  = false
-}
-```
-
-Then importing the resource using `terraform import random_string.test test`,
-would result in the triggering of a replacement (i.e., destroy-create) during
-the next `terraform apply`.
-
-### Avoiding Replacement
-
-If the resource were imported using `terraform import random_string.test test`,
-replacement can be avoided by using:
-
-1. Attribute values that match the imported ID and defaults:
-    ```terraform
-    resource "random_string" "test" {
-      length = 4
-      lower  = true
-    }
-    ```
-
-2. Attribute values that match the imported ID and omit the attributes with defaults:
-    ```terraform
-    resource "random_string" "test" {
-      length = 4
-    }
-    ```
-
-3. `ignore_changes` specifying the attributes to ignore:
-    ```terraform
-    resource "random_string" "test" {
-      length = 16
-      lower  = false
-
-      lifecycle {
-        ignore_changes = [
-          length,
-          lower,
-        ]
-      }
-    }
-    ```
-
-    **NOTE** `ignore_changes` is only required until the resource is recreated after import,
-    after which it will use the configuration values specified.
