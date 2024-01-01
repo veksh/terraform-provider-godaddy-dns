@@ -73,7 +73,7 @@ func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "DNS resource record, representing a single RR in managed domain",
+		MarkdownDescription: "DNS resource record represens a single RR in managed domain",
 		Attributes: map[string]schema.Attribute{
 			"domain": schema.StringAttribute{
 				MarkdownDescription: "Name of main managed domain (top-level) for this RR",
@@ -260,18 +260,18 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 	apiDomain, apiRecPlan := tf2model(planData)
 
 	var err error
-	var apiUpdateRecs []model.DNSRecord
 	if apiRecPlan.Type.IsSingleValue() {
 		// for CNAME and A: just one record replacing another
 		err = r.client.SetRecords(ctx,
 			apiDomain, apiRecPlan.Type, apiRecPlan.Name,
-			[]model.DNSRecord{{
+			[]model.DNSUpdateRecord{{
 				Data: apiRecPlan.Data,
 				TTL:  apiRecPlan.TTL,
 			}})
 	} else {
 		// for multi-valued records: copy all the rest except previous state
 		var stateData tfDNSRecord
+		var apiUpdateRecs []model.DNSUpdateRecord
 		resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
 		if resp.Diagnostics.HasError() {
 			return
@@ -284,7 +284,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
 		// and finally, our record (TODO: SRV has more fields)
-		ourRec := model.DNSRecord{
+		ourRec := model.DNSUpdateRecord{
 			Data:     apiRecPlan.Data,
 			TTL:      apiRecPlan.TTL,
 			Priority: apiRecPlan.Priority,
@@ -391,14 +391,14 @@ var errRecordGone = errors.New("record already gone")
 // matching stateData (it will be deleted or updated), converted to update
 // format (without type and name); these are intended to be kept unchanged
 // during update/delete ops on target record
-func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecord) ([]model.DNSRecord, error) {
+func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecord) ([]model.DNSUpdateRecord, error) {
 	// records may differ in data or value; should be present in current API reply
 
 	ctx = tflog.SetField(ctx, "operation", "read-keep")
 	tflog.Info(ctx, "recs-to-keep: start")
 	defer tflog.Info(ctx, "recs-to-keep: end")
 
-	res := []model.DNSRecord{}
+	res := []model.DNSUpdateRecord{}
 	matchesWithState := 0
 	apiDomain, apiRecState := tf2model(stateData)
 	apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecState.Type, apiRecState.Name)
@@ -418,9 +418,7 @@ func (r *RecordResource) apiRecsToKeep(ctx context.Context, stateData tfDNSRecor
 				matchesWithState += 1
 			} else {
 				// convert to update format
-				rec.Name = ""
-				rec.Type = ""
-				res = append(res, rec)
+				res = append(res, rec.ToUpdate())
 			}
 		}
 		tflog.Debug(ctx, fmt.Sprintf("Found %d records to keep", len(res)))

@@ -113,7 +113,7 @@ func TestUnitMXLifecycle(t *testing.T) {
 			Priority: 10,
 		},
 	}
-	mUpdates := []model.DNSRecord{
+	mUpdates := []model.DNSUpdateRecord{
 		{
 			Data:     mDataOther,
 			TTL:      3600,
@@ -363,11 +363,13 @@ func TestUnitTXTWithAnother(t *testing.T) {
 	// read (simulate another record added, and ours still present), update
 	// final step: clean up (not delete but set with 2 remaining records)
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: mDataOther, TTL: 600}, {Data: mDataChanged, TTL: 3600}}
+	rec2set := []model.DNSUpdateRecord{{Data: mDataOther, TTL: 600}, {Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
 	mRecsUpdated[0].Data = mDataChanged
 	mRecsUpdated = append(mRecsUpdated, mRecYetAnother)
-	recs2keep := []model.DNSRecord{{Data: mDataOther, TTL: 600}, {Data: mDataYetAnother, TTL: 7200}}
+	recs2keep := []model.DNSUpdateRecord{
+		{Data: mDataOther, TTL: 600},
+		{Data: mDataYetAnother, TTL: 7200}}
 	// 2 gets: 1st for read/refresh, 2nd for uptate/find recs to keep
 	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Twice()
 	mClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, rec2set).Return(nil).Once()
@@ -446,7 +448,7 @@ func TestUnitTXTLifecycle(t *testing.T) {
 	// read, update, clean up
 	// also: must skip update if already ok
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: mDataChanged, TTL: 3600}}
+	rec2set := []model.DNSUpdateRecord{{Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
 	mRecsUpdated[0].Data = mDataChanged
 	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
@@ -526,7 +528,7 @@ func TestUnitCnameLifecycle(t *testing.T) {
 	// read, update, clean up
 	// also: must skip update if already ok
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: mDataChanged, TTL: 3600}}
+	rec2set := []model.DNSUpdateRecord{{Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
 	mRecsUpdated[0].Data = mDataChanged
 	// if using same args + "Once": results could vary on 1st and 2nd call

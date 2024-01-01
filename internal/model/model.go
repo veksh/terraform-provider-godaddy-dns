@@ -28,14 +28,25 @@ const (
 )
 
 type DNSRecord struct {
-	Name     DNSRecordName // @ for top-level TXT/MX/A/NS
 	Type     DNSRecordType // from the enum above
+	Name     DNSRecordName // @ for top-level TXT/MX/A/NS
 	Data     DNSRecordData // "Parked" for top-level "A" (name "@")
 	TTL      DNSRecordTTL  // min 600, def 3600
 	Priority DNSRecordPrio // MX and SRV
 
-	Protocol DNSRecordSRVProto   // SRV: _tcp or _udp
 	Service  DNSRecordSRVService // SRV: like _ldap
+	Protocol DNSRecordSRVProto   // SRV: _tcp or _udp
+	Port     DNSRecordSRVPort    // SRV, 1-65535
+	Weight   DNSRecordSRVWeight  // SRV
+}
+
+type DNSUpdateRecord struct {
+	Data     DNSRecordData // "Parked" for top-level "A" (name "@")
+	TTL      DNSRecordTTL  // min 600, def 3600
+	Priority DNSRecordPrio // MX and SRV
+
+	Service  DNSRecordSRVService // SRV: like _ldap
+	Protocol DNSRecordSRVProto   // SRV: _tcp or _udp
 	Port     DNSRecordSRVPort    // SRV, 1-65535
 	Weight   DNSRecordSRVWeight  // SRV
 }
@@ -65,16 +76,29 @@ func (r DNSRecord) SameKey(r1 DNSRecord) bool {
 	return false
 }
 
+// convert DNSRecord to update format (dropping 2 first fields)
+func (r DNSRecord) ToUpdate() DNSUpdateRecord {
+	return DNSUpdateRecord{
+		Data:     r.Data,
+		TTL:      r.TTL,
+		Priority: r.Priority,
+		Weight:   r.Weight,
+		Protocol: r.Protocol,
+		Service:  r.Service,
+		Port:     r.Port,
+	}
+}
+
 // true if there is only one possible value for dom+type+key combination
 // i.e record is CNAME, A or AAAA
 func (t DNSRecordType) IsSingleValue() bool {
 	return t == REC_CNAME || t == REC_A || t == REC_AAAA
 }
 
-// client
+// client API interface
 type DNSApiClient interface {
 	AddRecords(ctx context.Context, domain DNSDomain, records []DNSRecord) error
 	GetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName) ([]DNSRecord, error)
-	SetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSRecord) error
+	SetRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName, records []DNSUpdateRecord) error
 	DelRecords(ctx context.Context, domain DNSDomain, rType DNSRecordType, rName DNSRecordName) error
 }

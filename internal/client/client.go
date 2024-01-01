@@ -70,16 +70,16 @@ func NewClient(apiURL string, key string, secret string) (*Client, error) {
 }
 
 // see API docs: https://developer.godaddy.com/doc/endpoint/domains/
-// ok for both Get and Add (patch), Put (replace) is partial
+// ok for both Get and Add (patch), Put (replace) is partial (no type and name)
 // first 4 are always present, rest are only for MX (priority) and SRV
 type apiDNSRecord struct {
-	Data     string `json:"data,omitempty"`
-	Name     string `json:"name"`
 	Type     string `json:"type,omitempty"`
-	TTL      uint32 `json:"ttl,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Data     string `json:"data"`
+	TTL      uint32 `json:"ttl"`
 	Priority uint16 `json:"priority,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
 	Service  string `json:"service,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
 	Port     uint16 `json:"port,omitempty"`
 	Weight   uint16 `json:"weight,omitempty"`
 }
@@ -143,15 +143,15 @@ func (c Client) GetRecords(ctx context.Context, rDomain model.DNSDomain,
 	res := make([]model.DNSRecord, 0, len(responceRecords))
 	for _, rr := range responceRecords {
 		res = append(res, model.DNSRecord{
-			Name:     model.DNSRecordName(rr.Name),
 			Type:     model.DNSRecordType(rr.Type),
+			Name:     model.DNSRecordName(rr.Name),
 			Data:     model.DNSRecordData(rr.Data),
 			TTL:      model.DNSRecordTTL(rr.TTL),
 			Priority: model.DNSRecordPrio(rr.Priority),
-			Weight:   model.DNSRecordSRVWeight(rr.Weight),
 			Protocol: model.DNSRecordSRVProto(rr.Protocol),
 			Service:  model.DNSRecordSRVService(rr.Service),
 			Port:     model.DNSRecordSRVPort(rr.Port),
+			Weight:   model.DNSRecordSRVWeight(rr.Weight),
 		})
 	}
 	return res, nil
@@ -167,9 +167,9 @@ func (c Client) AddRecords(ctx context.Context, rDomain model.DNSDomain,
 	recs := make([]apiDNSRecord, 0, len(records))
 	for _, mr := range records {
 		rec := apiDNSRecord{
-			Data: string(mr.Data),
 			Name: string(mr.Name),
 			Type: string(mr.Type),
+			Data: string(mr.Data),
 			TTL:  uint32(mr.TTL),
 		}
 		if mr.Type == model.REC_MX || mr.Type == model.REC_SRV {
@@ -201,18 +201,10 @@ func (c Client) AddRecords(ctx context.Context, rDomain model.DNSDomain,
 }
 
 // replace all records for rType+rName with the given
-//   - data and name fields in dns records must be blank
 //   - there could be several records with the same type + name (eg MX)
 //     and there is no way to update just one: they all get replaced
 func (c Client) SetRecords(ctx context.Context, rDomain model.DNSDomain,
-	rType model.DNSRecordType, rName model.DNSRecordName, records []model.DNSRecord) error {
-
-	// API will reject them anyway
-	for _, r := range records {
-		if r.Type != "" || r.Name != "" {
-			return fmt.Errorf("data and name in records should be blank")
-		}
-	}
+	rType model.DNSRecordType, rName model.DNSRecordName, records []model.DNSUpdateRecord) error {
 
 	rPath, _ := url.JoinPath(string(rDomain), "records", string(rType), string(rName))
 
