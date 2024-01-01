@@ -6,20 +6,21 @@ description: |-
 
 # GoDaddy DNS management provider: `godaddy-dns`
 
-This module allows to manage individual DNS resource records for domains hosted on GoDaddy DNS servers, using [management API](https://developer.godaddy.com/).
+This plug-in enables the managment of individual DNS resource records for domains hosted on GoDaddy DNS servers, using [the management API](https://developer.godaddy.com/).
 
-It deals only with DNS resources (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving exising records and tolerating external modifications (as far as possible).
+It only manages DNS resources (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving existant records and tolerating external modifications.
+
+## Usage
 
 Provider configuration is pretty trivial and usually empty, providing that authentication info is set in environment variables `GODADDY_API_KEY` and `GODADDY_API_SECRET` (see developer docs above for instructions on how to get them). Alternatively, they could be set in `api_key` and `api_secret` parameters in provider configuration.
 
 {{- .SchemaMarkdown | trimspace }}
 
-# DNS Record resource : `dns_record`
+## DNS Record resource : `dns_record`
 
 DNS RRs are described as instances of `dns_records` resource.
 
-It currently supports `A`, `AAAA`, `CNAME`, `MX`, `NS` and `TXT` records, the only
-omission being `SRV` (if anyone hosting AD on GoDaddy or uses them for VOIP or something like that, please let me know by creating an issue).
+It currently supports `A`, `AAAA`, `CNAME`, `MX`, `NS` and `TXT` records. `SRV` are not supported; if anyone hosting AD on GoDaddy or uses them for VOIP or something like that, please let me know by creating an issue.
 
 Example usage:
 
@@ -29,3 +30,10 @@ To set several records, use `for_each`:
 
 {{ tffile "examples/several_records/main.tf" }}
 
+## Differences vs alternative providers
+
+Differences vs n3integration provider and its forks:
+- granularity: top-level configuration object is record, not domain
+- updates do not result in scary plans threatening to destroy all the records in whole domain
+- external modifications are mostly ok: update will not complain if record is already set to the desired state
+- `destroy` is fully supported
