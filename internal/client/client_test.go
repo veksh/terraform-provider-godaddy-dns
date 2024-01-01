@@ -150,7 +150,7 @@ func TestSetRecords_ProperFormat(t *testing.T) {
 				jsonData, _ := json.Marshal(&reply)
 				w.WriteHeader(http.StatusExpectationFailed)
 				w.Header().Set("Content-Type", "application/json")
-				w.Write(jsonData)
+				w.Write(jsonData) //nolint:errcheck
 				return
 			}
 		}))
