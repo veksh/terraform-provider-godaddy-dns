@@ -72,10 +72,10 @@ func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "GoDaddy DNS record",
+		MarkdownDescription: "DNS resource record",
 		Attributes: map[string]schema.Attribute{
 			"domain": schema.StringAttribute{
-				MarkdownDescription: "managed domain (top-level)",
+				MarkdownDescription: "main managed domain (top-level)",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -104,14 +104,14 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "name (part of fqdn), may include `.` for sub-domains",
+				MarkdownDescription: "name (part of FQN), may include `.` for records in sub-domains",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"data": schema.StringAttribute{
-				MarkdownDescription: "contents: target for CNAME, ip address for A etc",
+				MarkdownDescription: "record value: target for CNAME, ip address for A etc",
 				Required:            true,
 			},
 			"ttl": schema.Int64Attribute{
@@ -121,7 +121,7 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Default:             int64default.StaticInt64(3600),
 			},
 			"priority": schema.Int64Attribute{
-				MarkdownDescription: "Priority for MX and SRV, def 0",
+				MarkdownDescription: "Priority for MX",
 				Optional:            true,
 			},
 		},

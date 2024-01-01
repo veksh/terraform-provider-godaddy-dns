@@ -11,6 +11,7 @@ provider "godaddy-dns" {}
 
 # struct for several records
 locals {
+  domain = "mydomain.com"
   records = {
     "mx" = {
       type = "MX",
@@ -29,7 +30,7 @@ locals {
 # with names like `godaddy-dns_record.array-of-records["mx"]`
 resource "godaddy-dns_record" "array-of-records" {
   for_each = local.records
-  domain   = "veksh.in"
+  domain   = local.domain
   type     = each.value.type
   name     = each.value.name
   data     = each.value.data

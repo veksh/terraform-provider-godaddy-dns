@@ -4,35 +4,28 @@ description: |-
   Manage DNS resource records for domains hosted on GoDaddy
 ---
 
-# GoDaddyDNS provider: `godaddy-dns`
+# GoDaddy DNS management provider: `godaddy-dns`
 
-This module allows to manage individual DNS resource records for domains
-hosted on GoDaddy DNS servers, using [management API](https://developer.godaddy.com/).
+This module allows to manage individual DNS resource records for domains hosted on GoDaddy DNS servers, using [management API](https://developer.godaddy.com/).
 
-It manages only DNS resources (no e.g. domain management) and aim to manage
-individual DNS resource records (not the whole domain), while preserving existant
-records and tolerating external modifications (as far as possible).
+It deals only with DNS resources (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving exising records and tolerating external modifications (as far as possible).
 
-Provider configuration is pretty trivial and usually empty, providing that
-authentication info is set in environment variables `GODADDY_API_KEY` and
-`GODADDY_API_SECRET` (see developer docs above for instructions on how to
-get them). Alternatively, they could be set in `api_key` and `api_secret`
-parameters in provider configuration.
+Provider configuration is pretty trivial and usually empty, providing that authentication info is set in environment variables `GODADDY_API_KEY` and `GODADDY_API_SECRET` (see developer docs above for instructions on how to get them). Alternatively, they could be set in `api_key` and `api_secret` parameters in provider configuration.
+
+{{- .SchemaMarkdown | trimspace }}
 
 # DNS Record resource : `dns_record`
 
-To manage DNS RRs they are described as instances of `dns_records` resource.
+DNS RRs are described as instances of `dns_records` resource.
 
 It currently supports `A`, `AAAA`, `CNAME`, `MX`, `NS` and `TXT` records, the only
-omission being `SRV` (if anyone hosting AD on GoDaddy or uses them for VOIP or
-something like that, please let me know by creating an issue).
+omission being `SRV` (if anyone hosting AD on GoDaddy or uses them for VOIP or something like that, please let me know by creating an issue).
 
 Example usage:
 
 {{ tffile "examples/provider/provider.tf" }}
 
-To set several records, `for_each` could be used:
+To set several records, use `for_each`:
 
-{{ tffile "examples/resources/godaddy-dns_record/resource.tf" }}
+{{ tffile "examples/several_records/main.tf" }}
 
-{{- .SchemaMarkdown | trimspace }}

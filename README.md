@@ -1,13 +1,10 @@
-# GoDaddy DNS Terraform Provider
+# GoDaddy DNS provider for Terraform
 
-This module allows to manage individual DNS resource records for domains
-hosted on GoDaddy DNS servers, using [management API](https://developer.godaddy.com/).
+This plug-in enables the managment of individual DNS resource records for domains hosted on GoDaddy DNS servers, using [the management API](https://developer.godaddy.com/).
 
-It manages only DNS resources (no e.g. domain management) and aim to manage
-individual DNS resource records (not the whole domain), while preserving existant
-records and tolerating external modifications (as far as possible).
+It only manages DNS resources (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving existant records and tolerating external modifications.
 
-Example usage is pretty straightforward
+Example usage (assuming environment variables `GODADDY_API_KEY` and `GODADDY_API_SECRET` are set up with GoDaddy API credentials):
 
 ``` terraform
 terraform {
@@ -31,11 +28,9 @@ resource "godaddy-dns_record" "new-cname" {
 }
 ```
 
-It currently supports `A`, `AAAA`, `CNAME`, `MX`, `NS` and `TXT` records, the only
-omission being `SRV` (if anyone hosting AD on GoDaddy or uses them for VOIP or
-something like that, please let me know by creating an issue).
+It currently supports `A`, `AAAA`, `CNAME`, `MX`, `NS` and `TXT` records (no `SRV` yet -- if anyone hosting AD on GoDaddy or uses them for VOIP or something like that, please let me know by creating an issue).
 
-Differences vs n3integration provider and its forks are
+Differences vs n3integration provider and its forks:
 - granularity: top-level configuration object is record, not domain
 - modifications do not result in scary plans to destroy the whole domain
 - `destroy` is fully supported

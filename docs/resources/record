@@ -2,12 +2,12 @@
 page_title: "godaddy-dns_record Resource - terraform-provider-godaddy-dns"
 subcategory: ""
 description: |-
-  GoDaddy DNS record
+  DNS resource record
 ---
 
 # godaddy-dns_record (Resource)
 
-GoDaddy DNS record
+DNS resource record
 
 ## Example Usage
 
@@ -58,14 +58,14 @@ resource "godaddy-dns_record" "records" {
 
 ### Required
 
-- `data` (String) contents: target for CNAME, ip address for A etc
-- `domain` (String) managed domain (top-level)
-- `name` (String) name (part of fqdn), may include `.` for sub-domains
+- `data` (String) record value: target for CNAME, ip address for A etc
+- `domain` (String) main managed domain (top-level)
+- `name` (String) name (part of FQN), may include `.` for records in sub-domains
 - `type` (String) type: A, CNAME etc
 
 ### Optional
 
-- `priority` (Number) Priority for MX and SRV, def 0
+- `priority` (Number) Priority for MX
 
 ### Read-Only
 

@@ -3,7 +3,7 @@ provider "godaddy-dns" {
   api_secret = "better set it in GODADDY_API_SECRET"
 }
 
-# create "alias.test.com" as as CNAME for "other.com"
+# create "alias.test.com" as CNAME for "other.com"
 resource "godaddy-dns_record" "my-cname" {
   domain = "test.com"
   type   = "CNAME"
