@@ -9,7 +9,7 @@ records and tolerating external modifications (as far as possible).
 
 Example usage is pretty straightforward
 
-``` HCL
+``` terraform
 terraform {
   required_providers {
     godaddy-dns = {
