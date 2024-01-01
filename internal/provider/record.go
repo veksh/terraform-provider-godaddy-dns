@@ -73,7 +73,7 @@ func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequ
 
 func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "DNS resource record, representing a single RR in managed domain",
+		MarkdownDescription: "DNS resource record represens a single RR in managed domain",
 		Attributes: map[string]schema.Attribute{
 			"domain": schema.StringAttribute{
 				MarkdownDescription: "Name of main managed domain (top-level) for this RR",

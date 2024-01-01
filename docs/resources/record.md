@@ -3,12 +3,12 @@
 page_title: "godaddy-dns_record Resource - terraform-provider-godaddy-dns"
 subcategory: ""
 description: |-
-  DNS resource record, representing a single RR in managed domain
+  DNS resource record represens a single RR in managed domain
 ---
 
 # godaddy-dns_record (Resource)
 
-DNS resource record, representing a single RR in managed domain
+DNS resource record represens a single RR in managed domain
 
 ## Example Usage
 
