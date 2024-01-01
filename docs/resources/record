@@ -65,7 +65,7 @@ resource "godaddy-dns_record" "records" {
 
 ### Optional
 
-- `priority` (Number) Record priority, used for MX (lower is higher)
+- `priority` (Number) Record priority, required for MX (lower is higher)
 - `ttl` (Number) Record time-to-live, >= 600s < 86400s, default 3600 seconds (1 hour)
 
 ## Import
