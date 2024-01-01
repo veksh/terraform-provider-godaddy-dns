@@ -363,7 +363,7 @@ func TestUnitTXTWithAnother(t *testing.T) {
 	// read (simulate another record added, and ours still present), update
 	// final step: clean up (not delete but set with 2 remaining records)
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSRecord{{Data: mDataOther, TTL: 600}, {Data: mDataChanged, TTL: 3600}}
+	rec2set := []model.DNSUpdateRecord{{Data: mDataOther, TTL: 600}, {Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
 	mRecsUpdated[0].Data = mDataChanged
 	mRecsUpdated = append(mRecsUpdated, mRecYetAnother)

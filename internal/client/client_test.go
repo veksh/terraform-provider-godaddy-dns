@@ -157,7 +157,7 @@ func TestSetRecords_ProperFormat(t *testing.T) {
 	defer ts.Close()
 
 	updRecs := []model.DNSUpdateRecord{{
-		Data:     "mx.test.com",
+		Data:     "mx1.test.com",
 		Priority: 10,
 		TTL:      3600,
 	}}
