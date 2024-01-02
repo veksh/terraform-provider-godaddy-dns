@@ -1,8 +1,8 @@
 # GoDaddy DNS provider for Terraform
 
-This plug-in enables the managment of individual DNS resource records for domains hosted on GoDaddy DNS servers, using [the management API](https://developer.godaddy.com/).
+This plug-in enables the managment of individual DNS resource records for domains hosted on GoDaddy DNS servers.
 
-It only manages DNS resources (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving existant records and tolerating external modifications.
+It only manages DNS (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving existant records and tolerating external modifications.
 
 ## Usage
 
@@ -42,6 +42,6 @@ GoDaddy API does not have stable identities for DNS records, and in case of exte
 
 Differences vs n3integration provider and its forks:
 - granularity: top-level configuration object is record, not domain
-- updates do not result in scary plans threatening to destroy all the records in whole domain
-- external modifications are mostly ok: update will not complain if record is already set to the desired state
+- updates do not result in scary plans threatening to destroy all the records in the whole domain
+- external modifications are mostly fine: update will not complain if record is already set to the desired state, delete will be NOOP if record is already gone
 - `destroy` is fully supported

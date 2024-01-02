@@ -12,3 +12,12 @@
 
 - lots of unit tests, real api check in acceptance tests
 - support for multi-valued records (MX, TXT, NS)
+
+## 0.2.1
+
+- update docs
+- first version published to terraform registry
+
+## 0.2.2
+
+- re-worded some docs, example for ACM challenge
