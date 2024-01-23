@@ -269,7 +269,7 @@ func TestUnitNSNoopModIfOk(t *testing.T) {
 // with the same name (by pre-creating one and checking it is ok afterwards)
 func TestAccTXTLifecycle(t *testing.T) {
 	mData := model.DNSRecordData("test text")
-	mDataChanged := model.DNSRecordData("updated text")
+	mDataChanged := model.DNSRecordData("updated text" + IMPORT_SEP + " separator")
 	mDataOther := model.DNSRecordData("not to be modified")
 	mType, mName, preExisting, tfResName := makeMockRec(model.REC_TXT, mDataOther)
 	resource.Test(t, resource.TestCase{
@@ -326,7 +326,7 @@ func TestAccTXTLifecycle(t *testing.T) {
 // appeared after first application)
 func TestUnitTXTWithAnother(t *testing.T) {
 	mData := model.DNSRecordData("test text")
-	mDataChanged := model.DNSRecordData("changed text")
+	mDataChanged := model.DNSRecordData("changed text" + IMPORT_SEP + " here")
 	mDataOther := model.DNSRecordData("do not modify")
 	mDataYetAnother := model.DNSRecordData("also appears")
 	mType, mName, mRecs, tfResName := makeMockRec(model.REC_TXT, mData)

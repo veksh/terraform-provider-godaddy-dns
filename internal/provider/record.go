@@ -21,6 +21,9 @@ import (
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
 
+// import separator
+const IMPORT_SEP = ":"
+
 // Ensure provider defined types fully satisfy framework interfaces.
 var (
 	_ resource.Resource                = &RecordResource{}
@@ -368,7 +371,7 @@ func (r *RecordResource) ImportState(ctx context.Context, req resource.ImportSta
 	// either as a separate structure in ReadRequest or as defaults: if only
 	// they were accessible, it would eliminate the need to pass anything here
 
-	idParts := strings.Split(req.ID, ":")
+	idParts := strings.SplitN(req.ID, IMPORT_SEP, 4)
 
 	// mb check format and emptiness
 	if len(idParts) != 4 {
