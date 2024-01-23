@@ -314,7 +314,7 @@ func TestAccTXTLifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr(
 						tfResName,
 						"data",
-						"updated text"),
+						string(mDataChanged)),
 				),
 			},
 		},
