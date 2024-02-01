@@ -41,6 +41,7 @@ jobs:
           version: latest
 
   generate:
+    name: Check docs generation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -56,7 +57,7 @@ jobs:
 
   # Run acceptance tests in a matrix with Terraform CLI versions
   test:
-    name: Terraform Provider Acceptance Tests
+    name: Run tests
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
