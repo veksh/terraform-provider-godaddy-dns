@@ -11,9 +11,9 @@ DNS resource record represens a single RR in managed domain
 
 It currently supports `A`, `AAAA`, `CNAME`, `MX`, `NS` and `TXT` records. `SRV` are not supported; if anyone hosting AD on GoDaddy or uses SRV for VOIP or something like that, please let me know by creating an issue.
 
-GoDaddy API does not have stable identities for DNS records, and in case of external modifications (e.g. via web console) behavior is different for "single-valued" vs "mult-valued" records
+GoDaddy API does not have stable identities for DNS records, and in case of external modifications (e.g. via web console) behaviour is different for "single-valued" vs "multi-valued" records
 - for "single-valued" record types (`A` and `CNAME`) there could be only 1 record of this type with a given name, so these are just replaced by update
-- for "multi-valued" record types (`MX`, `NS`, `TXT`) there could be several records with a given name (e.g. multiple MXes with different priorities and targets), so matching is done on value; if record's value is modified outside of Terraform, it is treated as a completely new record and is preserved (and original record is considered gone), so new record is created on update.
+- for "multi-valued" record types (`MX`, `NS`, `TXT`) there could be several records with a given name (e.g. multiple MXes with different priorities and targets), so matching is done on value; if record's value is modified outside of Terraform, it is treated as a completely different record and is preserved (and original record is considered gone), so record is re-created on update.
 
 ## Example Usage
 

@@ -6,9 +6,9 @@ description: |-
 
 # GoDaddy DNS management plugin: `godaddy-dns`
 
-This plug-in allows for managment of individual DNS resource records for domains hosted on GoDaddy servers.
+This plug-in allows for management of individual DNS resource records for domains hosted on GoDaddy servers.
 
-It only manages DNS (no e.g. domain orders management) and deals with individual DNS records (not the whole domain), preserving exising records and tolerating external modifications.
+It only manages DNS (no e.g. domain orders management) and deals with individual DNS records (not the whole domain), preserving existing records and tolerating external modifications.
 
 ## Configuration
 
