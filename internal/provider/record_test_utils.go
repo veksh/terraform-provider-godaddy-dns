@@ -108,7 +108,7 @@ func simpleResourceConfig(rectype model.DNSRecordType, target model.DNSRecordDat
 	return buff.String()
 }
 
-// - terraform config witn N records
+// - terraform config with N records
 // - domain record name for it ("test-<type>._test")
 // - terraform resource name for record type ("godaddy-dns_record.test-<type>")
 // - []model.DNSRecord array with all attrs
@@ -122,8 +122,9 @@ type testRecSet struct {
 }
 
 // create terraform config for N record with the same name but different values
-func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) testRecSet {
+func makeTestRecSet(values []model.DNSRecordData) testRecSet {
 	res := testRecSet{}
+	rectype := model.REC_A // for now it is always A, lets make a linter happy :)
 
 	templateString := `
 	provider "godaddy-dns" {}

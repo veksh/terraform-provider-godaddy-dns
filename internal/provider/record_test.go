@@ -41,19 +41,19 @@ var (
 // two A resources + 1 pre-existing, all with the same hame
 func TestUnitALifecycle(t *testing.T) {
 	// this will be found as pre-existing
-	mRecsPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1"})
+	mRecsPre := makeTestRecSet([]model.DNSRecordData{"1.1.1.1"})
 	// records to add
-	mRecsToAdd := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "3.3.3.3"})
+	mRecsToAdd := makeTestRecSet([]model.DNSRecordData{"2.2.2.2", "3.3.3.3"})
 	// after adding 1/2 + kept pre
-	mRecsTgt1 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2"})
+	mRecsTgt1 := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "2.2.2.2"})
 	// mRecsTgt2 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "3.3.3.3"})
 	// after adding 2/2 + kept pre
-	mRecsTgt := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "3.3.3.3"})
+	mRecsTgt := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "2.2.2.2", "3.3.3.3"})
 
 	// 2nd step: update
-	mRecsToUpd := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
-	mRecsToUpdTgt := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
-	mRecsTgt4 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
+	mRecsToUpd := makeTestRecSet([]model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
+	mRecsToUpdTgt := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
+	mRecsTgt4 := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
 
 	mType, mName := model.REC_A, mRecsPre.DNSRecName
 
