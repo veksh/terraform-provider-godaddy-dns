@@ -38,50 +38,32 @@ var (
 	mDom = model.DNSDomain(TEST_DOMAIN)
 )
 
-// simple A resource lifecycle
+// two A resources + 1 pre-existing, all with the same hame
 func TestUnitALifecycle(t *testing.T) {
-	mType, mName, _, _ := makeMockRec(model.REC_A, "1.1.1.1")
-	mData := model.DNSRecordData("1.1.1.1")
-	mDataChanged := model.DNSRecordData("1.1.1.2")
-	mDataOther := model.DNSRecordData("1.1.2.1")
-	mRecs := []model.DNSRecord{
-		{
-			Name: mName,
-			Type: mType,
-			Data: mDataOther,
-			TTL:  3600,
-		}, {
-			Name: mName,
-			Type: mType,
-			Data: mData,
-			TTL:  3600,
-		},
-	}
-	mUpdates := []model.DNSUpdateRecord{
-		{
-			Data: mDataOther,
-			TTL:  3600,
-		}, {
-			Data: mDataChanged,
-			TTL:  3600,
-		},
-	}
+	// this will be found as pre-existing
+	mRecsPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1"})
+	// target data for a first step: "create" (but keep "pre")
+	mRecsFirst := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "3.3.3.3"})
+	mRecsFirstWithPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "3.3.3.3"})
+	// target data for a second step: "update" and "delete/cleanup" (still keep "pre")
+	mRecsUpdated := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
+	mRecsUpdatedWithPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
+	// common
+	mType, mName := model.REC_A, mRecsPre.DNSRecName
 
-	// add record, read it back
+	// add record, read it back (with pre)
 	mockClientAdd := model.NewMockDNSApiClient(t)
-	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecs[1:2]).Return(nil).Once()
-	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil)
+	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsFirst.AddRecords).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsFirstWithPre.AddRecords, nil)
 
 	// read, update, then delete
 	mockClientUpd := model.NewMockDNSApiClient(t)
-	mRecsUpdated := slices.Clone(mRecs)
-	mRecsUpdated[1].Data = mDataChanged
 	// read + update
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Twice()
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mUpdates).Return(nil).Once()
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsFirstWithPre.AddRecords, nil).Twice()
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsUpdatedWithPre.UpdRecords).Return(nil).Once()
 	// cleanup: delete by setting it back
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Twice()
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mUpdates[:1]).Return(nil).Once()
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdatedWithPre.AddRecords, nil).Twice()
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once()
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
@@ -89,12 +71,12 @@ func TestUnitALifecycle(t *testing.T) {
 			// create, read back
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   simpleResourceConfig(model.REC_A, mData),
+				Config:                   mRecsFirst.TFConfig,
 			},
-			// read back, delete (must be noop because already gone)
+			// read back, change, delete (must be noop because already gone)
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   simpleResourceConfig(model.REC_A, mDataChanged),
+				Config:                   mRecsUpdated.TFConfig,
 			},
 		},
 	})

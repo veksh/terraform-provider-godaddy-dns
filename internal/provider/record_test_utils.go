@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
@@ -105,6 +106,104 @@ func simpleResourceConfig(rectype model.DNSRecordType, target model.DNSRecordDat
 		return err.Error()
 	}
 	return buff.String()
+}
+
+// - terraform config witn N records
+// - domain record name for it ("test-<type>._test")
+// - terraform resource name for record type ("godaddy-dns_record.test-<type>")
+// - []model.DNSRecord array with all attrs
+// - []model.DNSUpdateRecord w/o name and type
+type testRecSet struct {
+	TFConfig   string
+	DNSRecName model.DNSRecordName
+	TFResName  string
+	AddRecords []model.DNSRecord
+	UpdRecords []model.DNSUpdateRecord
+}
+
+// create terraform config for N record with the same name but different values
+func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) testRecSet {
+	res := testRecSet{}
+
+	templateString := `
+	provider "godaddy-dns" {}
+	locals {
+	  dataValues = [{{ .RecValsJoined }}]
+	}
+	resource "godaddy-dns_record" "{{ .RecName }}" {
+	  domain = "{{ .Domain }}"
+	  type   = "{{ .RecType | upper }}"
+	  name   = "{{ .DNSRecName }}"
+
+	  count  = length(var.dataValues)
+	  data   = var.dataValues[count.index]
+
+	  {{ if gt .Priority -1 }}
+	  priority = {{ .Priority }}
+	  {{ end}}
+	}`
+	funcMap := template.FuncMap{
+		"lower": strings.ToLower,
+		"upper": strings.ToUpper,
+	}
+	tmpl, err := template.New("config").Funcs(funcMap).Parse(templateString)
+	if err != nil {
+		return res
+	}
+
+	recName := "test-" + strings.ToLower(string(rectype))
+	var recPrio model.DNSRecordPrio
+	if rectype == model.REC_MX {
+		recPrio = 10
+	}
+	var buff strings.Builder
+	valStrings := lo.Map(values, func(x model.DNSRecordData, _ int) string {
+		return fmt.Sprintf("\"%v\"", x)
+	})
+	valStringsJoined := strings.Join(valStrings, ",")
+
+	resConf := struct {
+		Domain        string
+		RecType       string
+		RecValsJoined string
+		RecName       string
+		DNSRecName    string
+		Priority      int
+	}{
+		TEST_DOMAIN,
+		string(rectype),
+		valStringsJoined,
+		recName,
+		recName + "._test",
+		-1,
+	}
+	if rectype == model.REC_MX {
+		resConf.Priority = 10
+	}
+	err = tmpl.ExecuteTemplate(&buff, "config", resConf)
+	if err != nil {
+		return res
+	}
+	res.TFConfig = buff.String()
+	res.DNSRecName = model.DNSRecordName(recName + "._test")
+	res.TFResName = "godaddy-dns_record." + recName
+	res.AddRecords = lo.Map(values, func(data model.DNSRecordData, _ int) model.DNSRecord {
+		return model.DNSRecord{
+			Name:     res.DNSRecName,
+			Type:     rectype,
+			Data:     data,
+			TTL:      3600,
+			Priority: recPrio,
+		}
+	})
+	res.UpdRecords = lo.Map(values, func(data model.DNSRecordData, _ int) model.DNSUpdateRecord {
+		return model.DNSUpdateRecord{
+			Data:     data,
+			TTL:      3600,
+			Priority: recPrio,
+		}
+	})
+	return res
 }
 
 // check that actual record (from API query) matches resource state
