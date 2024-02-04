@@ -117,7 +117,7 @@ type testRecSet struct {
 	TFConfig   string
 	DNSRecName model.DNSRecordName
 	TFResName  string
-	AddRecords []model.DNSRecord
+	Records    []model.DNSRecord
 	UpdRecords []model.DNSUpdateRecord
 }
 
@@ -186,7 +186,7 @@ func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) t
 	res.TFConfig = buff.String()
 	res.DNSRecName = model.DNSRecordName(recName + "._test")
 	res.TFResName = "godaddy-dns_record." + recName
-	res.AddRecords = lo.Map(values, func(data model.DNSRecordData, _ int) model.DNSRecord {
+	res.Records = lo.Map(values, func(data model.DNSRecordData, _ int) model.DNSRecord {
 		return model.DNSRecord{
 			Name:     res.DNSRecName,
 			Type:     rectype,

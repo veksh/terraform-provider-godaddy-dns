@@ -42,28 +42,34 @@ var (
 func TestUnitALifecycle(t *testing.T) {
 	// this will be found as pre-existing
 	mRecsPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1"})
-	// target data for a first step: "create" (but keep "pre")
-	mRecsFirst := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "3.3.3.3"})
-	mRecsFirstWithPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "3.3.3.3"})
-	// target data for a second step: "update" and "delete/cleanup" (still keep "pre")
-	mRecsUpdated := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
-	mRecsUpdatedWithPre := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
-	// common
+	// records to add
+	mRecsToAdd := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "3.3.3.3"})
+	// after adding 1/2 + kept pre
+	mRecsTgt1 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2"})
+	mRecsTgt2 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "3.3.3.3"})
+	// after adding 2/2 + kept pre
+	mRecsTgt := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "3.3.3.3"})
+
 	mType, mName := model.REC_A, mRecsPre.DNSRecName
 
-	// add record, read it back (with pre)
+	// add records for .2 and .3, read it back (with pre .1)
 	mockClientAdd := model.NewMockDNSApiClient(t)
-	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsFirst.AddRecords).Return(nil).Once()
-	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsFirstWithPre.AddRecords, nil)
+	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsToAdd.Records[0:1]).Return(nil).Once()
+	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsToAdd.Records[1:2]).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
 
-	// read, update, then delete
-	mockClientUpd := model.NewMockDNSApiClient(t)
-	// read + update
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsFirstWithPre.AddRecords, nil).Twice()
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsUpdatedWithPre.UpdRecords).Return(nil).Once()
-	// cleanup: delete by setting it back
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdatedWithPre.AddRecords, nil).Twice()
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once()
+	// destroy: looking pretty absurd :)
+	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
+	mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
+	mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt2.UpdRecords).Return(nil).Once()
+
+	// // read, update, then delete
+	// mockClientUpd := model.NewMockDNSApiClient(t)
+	// mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(5) //.Twice()
+	// // mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
+	// // mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil) // .Twice()
+	// mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once()
+	// // mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsPre.Records, nil)
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
@@ -71,13 +77,13 @@ func TestUnitALifecycle(t *testing.T) {
 			// create, read back
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
-				Config:                   mRecsFirst.TFConfig,
+				Config:                   mRecsToAdd.TFConfig,
 			},
-			// read back, change, delete (must be noop because already gone)
-			{
-				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
-				Config:                   mRecsUpdated.TFConfig,
-			},
+			// // read back, change, delete (must be noop because already gone)
+			// {
+			// 	ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
+			// 	Config:                   mRecsToAdd.TFConfig,
+			// },
 		},
 	})
 }

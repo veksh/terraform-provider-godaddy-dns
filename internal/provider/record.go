@@ -45,6 +45,7 @@ func setLogCtx(ctx context.Context, tfRec tfDNSRecord, op string) context.Contex
 	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
 	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
 	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
+	ctx = tflog.SetField(ctx, "data", tfRec.Data.ValueString())
 	ctx = tflog.SetField(ctx, "operation", op)
 	return ctx
 }
