@@ -58,7 +58,13 @@ func TestUnitALifecycle(t *testing.T) {
 	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsToAdd.Records[1:2]).Return(nil).Once()
 	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
 
-	// destroy: looking pretty absurd :)
+	// destroy: cleanup right after 1st step; really not deterministic:
+	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Once()
+	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
+	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil).Once()
+	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once()
+
+	// a bit absurd, but stable :)
 	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
 	mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
 	mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt2.UpdRecords).Return(nil).Once()
