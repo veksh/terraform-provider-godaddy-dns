@@ -3,10 +3,10 @@ package provider
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"os"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -135,8 +135,8 @@ func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) t
 	  type   = "{{ .RecType | upper }}"
 	  name   = "{{ .DNSRecName }}"
 
-	  count  = length(var.dataValues)
-	  data   = var.dataValues[count.index]
+	  count  = length(local.dataValues)
+	  data   = local.dataValues[count.index]
 
 	  {{ if gt .Priority -1 }}
 	  priority = {{ .Priority }}
@@ -160,19 +160,18 @@ func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) t
 	valStrings := lo.Map(values, func(x model.DNSRecordData, _ int) string {
 		return fmt.Sprintf("\"%v\"", x)
 	})
-	valStringsJoined := strings.Join(valStrings, ",")
-
+	valStringsJoined := strings.Join(valStrings, ", ")
 	resConf := struct {
 		Domain        string
 		RecType       string
-		RecValsJoined string
+		RecValsJoined *string
 		RecName       string
 		DNSRecName    string
 		Priority      int
 	}{
 		TEST_DOMAIN,
 		string(rectype),
-		valStringsJoined,
+		&valStringsJoined,
 		recName,
 		recName + "._test",
 		-1,
