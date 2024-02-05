@@ -38,6 +38,71 @@ var (
 	mDom = model.DNSDomain(TEST_DOMAIN)
 )
 
+// two A resources + 1 pre-existing, all with the same hame
+func TestUnitALifecycle(t *testing.T) {
+	// this will be found as pre-existing
+	mRecsPre := makeTestRecSet([]model.DNSRecordData{"1.1.1.1"})
+	// records to add
+	mRecsToAdd := makeTestRecSet([]model.DNSRecordData{"2.2.2.2", "3.3.3.3"})
+	// after adding 1/2 + kept pre
+	mRecsTgt1 := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "2.2.2.2"})
+	// mRecsTgt2 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "3.3.3.3"})
+	// after adding 2/2 + kept pre
+	mRecsTgt := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "2.2.2.2", "3.3.3.3"})
+
+	// 2nd step: update
+	mRecsToUpd := makeTestRecSet([]model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
+	mRecsToUpdTgt := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
+	mRecsTgt4 := makeTestRecSet([]model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
+
+	mType, mName := model.REC_A, mRecsPre.DNSRecName
+
+	// add records for .2 and .3, read it back (with pre .1)
+	mockClientAdd := model.NewMockDNSApiClient(t)
+	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsToAdd.Records[0:1]).Return(nil).Once()
+	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsToAdd.Records[1:2]).Return(nil).Once()
+	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
+
+	// destroy after 1st step: cleanup right after 1st step; really not deterministic:
+	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Once()
+	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
+	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil).Once()
+	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once()
+
+	// destroy after 1st step: a bit absurd, but at least stable :)
+	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
+	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
+	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt2.UpdRecords).Return(nil).Once()
+
+	// read, update, then delete for clean-up
+	mockClientUpd := model.NewMockDNSApiClient(t)
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(3)
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsToUpdTgt.UpdRecords).Return(nil).Once()
+	// again, clean-up order is not deterministic, so lets return same results to both and see them keeping pre
+	// better way would be "3 recs -> del 3rd -> 2 recs -> del 2nd -> only pre-existing left"
+	// the problem is that clean-up is going in parallel, so it is hard to return a proper results,
+	// and there is no way to express these dependencies in mock
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsToUpdTgt.Records, nil).Times(4)
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt4.UpdRecords).Return(nil).Once()
+
+	resource.UnitTest(t, resource.TestCase{
+		// ProtoV6ProviderFactories: testProviderFactory,
+		Steps: []resource.TestStep{
+			// create, read back
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientAdd),
+				Config:                   mRecsToAdd.TFConfig,
+			},
+			// read back, change, delete (must be noop because already gone)
+			{
+				ProtoV6ProviderFactories: mockClientProviderFactory(mockClientUpd),
+				Config:                   mRecsToUpd.TFConfig,
+			},
+		},
+	})
+}
+
 // simple acceptance test for MX resource, with pre-existing one
 func TestAccMXLifecycle(t *testing.T) {
 	mData := model.DNSRecordData("mx1.test.com")

@@ -45,6 +45,7 @@ func setLogCtx(ctx context.Context, tfRec tfDNSRecord, op string) context.Contex
 	ctx = tflog.SetField(ctx, "domain", tfRec.Domain.ValueString())
 	ctx = tflog.SetField(ctx, "type", tfRec.Type.ValueString())
 	ctx = tflog.SetField(ctx, "name", tfRec.Name.ValueString())
+	ctx = tflog.SetField(ctx, "data", tfRec.Data.ValueString())
 	ctx = tflog.SetField(ctx, "operation", op)
 	return ctx
 }
@@ -212,9 +213,9 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		tflog.Info(ctx, fmt.Sprintf(
 			"Reading DNS record: got %d answers", numRecs))
 		// meaning of "match" is different between types
-		//  - for A, AAAA, and CNAME (and SOA), there could be only 1 records
-		//    with a given name in domain
-		//  - for TXT, MX and NS there could be several, have to match by data
+		//  - for CNAME (and SOA), there could be only 1 records with a given name
+		//    in a (sub-)domain
+		//  - for A, TXT, MX and NS there could be several, have to match by data
 		//    - MXes could have different priorities; in theory, MX 0 and MX 10
 		//      could point to the same "data", but lets think that it is a
 		//      preversion and replace it with one :)
@@ -264,7 +265,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 
 	var err error
 	if apiRecPlan.Type.IsSingleValue() {
-		// for CNAME and A: just one record replacing another
+		// for CNAME: just one record replacing another
 		err = r.client.SetRecords(ctx,
 			apiDomain, apiRecPlan.Type, apiRecPlan.Name,
 			[]model.DNSUpdateRecord{{
@@ -292,6 +293,8 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 			TTL:      apiRecPlan.TTL,
 			Priority: apiRecPlan.Priority,
 		}
+		// TODO: probably cannot be by construction :)
+		// and comparing them this way is wrong anyway
 		if slices.Index(apiUpdateRecs, ourRec) >= 0 {
 			tflog.Info(ctx, "Record is already present, nothing to do: done")
 			err = nil
@@ -318,7 +321,8 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	ctx = setLogCtx(ctx, stateData, "delete: start")
+	ctx = setLogCtx(ctx, stateData, "delete")
+	tflog.Info(ctx, "delete: start")
 	defer tflog.Info(ctx, "delete: end")
 
 	apiDomain, apiRecState := tf2model(stateData)
