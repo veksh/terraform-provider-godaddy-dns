@@ -321,7 +321,8 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 
-	ctx = setLogCtx(ctx, stateData, "delete: start")
+	ctx = setLogCtx(ctx, stateData, "delete")
+	tflog.Info(ctx, "delete: start")
 	defer tflog.Info(ctx, "delete: end")
 
 	apiDomain, apiRecState := tf2model(stateData)
