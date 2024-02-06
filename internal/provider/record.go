@@ -163,6 +163,10 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 	r.client = client
 }
 
+// create will complain (and fail with client error) if same record is already present
+// (mb as a result of calling "apply" with updated config with old record already gone)
+// so state must be manually imported to continue (could step around this, but this will
+// contradict terraform ideology -- see below)
 func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -177,9 +181,13 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecPlan := tf2model(planData)
-	// add: does not check (read) if creating w/o prior state
-	// and so will fail on uniqueness violation (e.g. if CNAME already
-	// exists, even with the same name); ok for us -- let API do checking
+	// "put"/"add" does not check prior state (terraform does not provide one for Create)
+	// and so will fail on uniqueness violation (e.g. if record already exists
+	// after external modification, or if it is the second CNAME RR etc)
+	// - lets think it is ok for now -- let API do checking + run "import" if required
+	// - alt/TODO: read records and do noop if target record is already there
+	//   like `apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name)`
+	//   but lets not be silent about that
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRecPlan})
 
 	if err != nil {
@@ -261,6 +269,13 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	}
 }
 
+// updating will fail if resource is already changed externally: old record will be "gone"
+// after refresh, so actually "create" will be called for new one (and see above): i.e.
+// changing "A -> 1.1.1.1" to "A -> 2.2.2.2" first in domain and then in main.tf will
+// result in an error (refresh will mark it as gone and will try to create new)
+// so, do not do that :)
+// the way to settle things down in this case is "refresh" (will mark old as gone)
+// + "import" to new (so state will be ok)
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -299,13 +314,16 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
 			return
 		}
+		// lets try to detect the situation when old record is gone and new is present
+		// actually this should not happen (implicit "refresh" before "apply" will remove
+		// old record from the state), but who knows :)
 		oldGone := false
 		if err == errRecordGone {
 			tflog.Info(ctx, "Current record is already gone")
 			oldGone = true
 		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
-		// and finally, our record (TODO: SRV has more fields)
+		// and finally, add our record (TODO: SRV has more fields)
 		ourRec := model.DNSUpdateRecord{
 			Data:     apiRecPlan.Data,
 			TTL:      apiRecPlan.TTL,

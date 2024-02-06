@@ -122,9 +122,8 @@ type testRecSet struct {
 }
 
 // create terraform config for N record with the same name but different values
-func makeTestRecSet(values []model.DNSRecordData) testRecSet {
+func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) testRecSet {
 	res := testRecSet{}
-	rectype := model.REC_A // for now it is always A, lets make a linter happy :)
 
 	templateString := `
 	provider "godaddy-dns" {}
