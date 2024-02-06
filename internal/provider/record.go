@@ -212,11 +212,9 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 			fmt.Sprintf("Reading DNS records: query failed: %s", err))
 		return
 	}
+	numFound := 0
 	if numRecs := len(apiAllRecs); numRecs == 0 {
 		tflog.Debug(ctx, "Reading DNS record: currently absent")
-		// no resource found: mb ok or need to re-create
-		resp.State.RemoveResource(ctx)
-		return
 	} else {
 		tflog.Info(ctx, fmt.Sprintf(
 			"Reading DNS record: got %d answers", numRecs))
@@ -229,7 +227,6 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//      preversion and replace it with one :)
 		//    - TXT and NS for same name could differ only in TTL
 		//  - for SRV PK is proto+service+port+data, value is weight+prio+ttl
-		numFound := 0
 		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx, fmt.Sprintf("Got DNS record: %v", rec))
 			if rec.SameKey(apiRecState) {
@@ -246,16 +243,22 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 				numFound += 1
 			}
 		}
-		if numFound == 0 {
-			tflog.Info(ctx, "no matching record found")
-		} else {
-			if numFound > 1 {
-				tflog.Warn(ctx, "more than one matching record found, using last")
-			}
-		}
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
+	if numFound == 0 {
+		// mb quite ok, e.g. on creation
+		tflog.Info(ctx, "Resource is currently absent")
+		resp.State.RemoveResource(ctx)
+	} else {
+		if numFound > 1 {
+			// unlikely to happen (mb several MXes with the same target?)
+			tflog.Warn(ctx, "More than one instance of a resource present")
+			resp.Diagnostics.AddWarning(
+				"Duplicate resource instances present",
+				"Will use the last one")
+		}
+		resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
+	}
 }
 
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
