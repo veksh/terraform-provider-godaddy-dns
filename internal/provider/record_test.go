@@ -52,7 +52,7 @@ func TestUnitALifecycle(t *testing.T) {
 	// 2nd step: update
 	mRecsToUpd := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
 	mRecsToUpdTgt := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
-	mRecsTgt4 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
+	// mRecsTgt4 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
 
 	mType, mName := model.REC_A, mRecsPre.DNSRecName
 
@@ -62,29 +62,17 @@ func TestUnitALifecycle(t *testing.T) {
 	mockClientAdd.EXPECT().AddRecords(mCtx, mDom, mRecsToAdd.Records[1:2]).Return(nil).Once()
 	mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
 
-	// destroy after 1st step: cleanup right after 1st step; really not deterministic:
-	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Once()
-	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
-	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil).Once()
-	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once()
-
-	// destroy after 1st step: a bit absurd, but at least stable :)
-	// mockClientAdd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Twice()
-	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
-	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt2.UpdRecords).Return(nil).Once()
-
 	// read, update, then delete for clean-up
 	// augmented with trace markers to clarify the order a bit
 	mockClientUpd := model.NewMockDNSApiClient(t)
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(3).Run(traceMarker("get 1 (mRegsTgt)"))
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(3).Run(traceMarker("get 1 (mRegsTgt)*3"))
 	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsToUpdTgt.UpdRecords).Return(nil).Once().Run(traceMarker("set 1 (mRecsToUpdTgt)"))
-	// again, clean-up order is not deterministic, so lets return same results to both and see them keeping pre
-	// better way would be "3 recs -> del 3rd -> 2 recs -> del 2nd -> only pre-existing left"
-	// the problem is that clean-up is going in parallel, so it is hard to return a proper results,
-	// and there is no way to express these dependencies in mock
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsToUpdTgt.Records, nil).Times(4).Run(traceMarker("get 2 (mRecsToUpdTgt)"))
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt4.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/1 (mRecsTgt4)"))
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/2 (mRecsTgt1)"))
+	// again, clean-up order is not deterministic, so those are a bit fragile
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsToUpdTgt.Records, nil).Times(3).Run(traceMarker("get 2/1 (mRecsToUpdTgt)*3"))
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil).Once().Run(traceMarker("get 2/2 (mRecsTgt1)"))
+
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/1 (mRecsTgt1)"))
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/2 (mRecsPre)"))
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
