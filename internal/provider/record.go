@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -64,11 +65,14 @@ func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
 
 // RecordResource defines the implementation of GoDaddy DNS RR
 type RecordResource struct {
-	client model.DNSApiClient
+	client   model.DNSApiClient
+	reqMutex *sync.Mutex
 }
 
-func NewRecordResource() resource.Resource {
-	return &RecordResource{}
+func RecordResourceFactory(m *sync.Mutex) func() resource.Resource {
+	return func() resource.Resource {
+		return &RecordResource{reqMutex: m}
+	}
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -159,6 +163,10 @@ func (r *RecordResource) Configure(ctx context.Context, req resource.ConfigureRe
 	r.client = client
 }
 
+// create will complain (and fail with client error) if same record is already present
+// (mb as a result of calling "apply" with updated config with old record already gone)
+// so state must be manually imported to continue (could step around this, but this will
+// contradict terraform ideology -- see below)
 func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -169,11 +177,17 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	ctx = setLogCtx(ctx, planData, "create")
 	tflog.Info(ctx, "create: start")
 	defer tflog.Info(ctx, "create: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecPlan := tf2model(planData)
-	// add: does not check (read) if creating w/o prior state
-	// and so will fail on uniqueness violation (e.g. if CNAME already
-	// exists, even with the same name); ok for us -- let API do checking
+	// "put"/"add" does not check prior state (terraform does not provide one for Create)
+	// and so will fail on uniqueness violation (e.g. if record already exists
+	// after external modification, or if it is the second CNAME RR etc)
+	// - lets think it is ok for now -- let API do checking + run "import" if required
+	// - alt/TODO: read records and do noop if target record is already there
+	//   like `apiAllRecs, err := r.client.GetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name)`
+	//   but lets not be silent about that
 	err := r.client.AddRecords(ctx, apiDomain, []model.DNSRecord{apiRecPlan})
 
 	if err != nil {
@@ -195,6 +209,8 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	ctx = setLogCtx(ctx, stateData, "read")
 	tflog.Info(ctx, "read: start")
 	defer tflog.Info(ctx, "read: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecState := tf2model(stateData)
 
@@ -204,11 +220,9 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 			fmt.Sprintf("Reading DNS records: query failed: %s", err))
 		return
 	}
+	numFound := 0
 	if numRecs := len(apiAllRecs); numRecs == 0 {
 		tflog.Debug(ctx, "Reading DNS record: currently absent")
-		// no resource found: mb ok or need to re-create
-		resp.State.RemoveResource(ctx)
-		return
 	} else {
 		tflog.Info(ctx, fmt.Sprintf(
 			"Reading DNS record: got %d answers", numRecs))
@@ -221,7 +235,6 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		//      preversion and replace it with one :)
 		//    - TXT and NS for same name could differ only in TTL
 		//  - for SRV PK is proto+service+port+data, value is weight+prio+ttl
-		numFound := 0
 		for _, rec := range apiAllRecs {
 			tflog.Debug(ctx, fmt.Sprintf("Got DNS record: %v", rec))
 			if rec.SameKey(apiRecState) {
@@ -238,18 +251,31 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 				numFound += 1
 			}
 		}
-		if numFound == 0 {
-			tflog.Info(ctx, "no matching record found")
-		} else {
-			if numFound > 1 {
-				tflog.Warn(ctx, "more than one matching record found, using last")
-			}
-		}
 	}
 
-	resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
+	if numFound == 0 {
+		// mb quite ok, e.g. on creation
+		tflog.Info(ctx, "Resource is currently absent")
+		resp.State.RemoveResource(ctx)
+	} else {
+		if numFound > 1 {
+			// unlikely to happen (mb several MXes with the same target?)
+			tflog.Warn(ctx, "More than one instance of a resource present")
+			resp.Diagnostics.AddWarning(
+				"Duplicate resource instances present",
+				"Will use the last one")
+		}
+		resp.Diagnostics.Append(resp.State.Set(ctx, &stateData)...)
+	}
 }
 
+// updating will fail if resource is already changed externally: old record will be "gone"
+// after refresh, so actually "create" will be called for new one (and see above): i.e.
+// changing "A -> 1.1.1.1" to "A -> 2.2.2.2" first in domain and then in main.tf will
+// result in an error (refresh will mark it as gone and will try to create new)
+// so, do not do that :)
+// the way to settle things down in this case is "refresh" (will mark old as gone)
+// + "import" to new (so state will be ok)
 func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var planData tfDNSRecord
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &planData)...)
@@ -260,6 +286,8 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 	ctx = setLogCtx(ctx, planData, "update")
 	tflog.Info(ctx, "update: start")
 	defer tflog.Info(ctx, "update: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
@@ -286,20 +314,33 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
 			return
 		}
+		// lets try to detect the situation when old record is gone and new is present
+		// actually this should not happen (implicit "refresh" before "apply" will remove
+		// old record from the state), but who knows :)
+		oldGone := false
+		if err == errRecordGone {
+			tflog.Info(ctx, "Current record is already gone")
+			oldGone = true
+		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
-		// and finally, our record (TODO: SRV has more fields)
+		// and finally, add our record (TODO: SRV has more fields)
 		ourRec := model.DNSUpdateRecord{
 			Data:     apiRecPlan.Data,
 			TTL:      apiRecPlan.TTL,
 			Priority: apiRecPlan.Priority,
 		}
-		// TODO: probably cannot be by construction :)
-		// and comparing them this way is wrong anyway
+		newPresent := false
 		if slices.Index(apiUpdateRecs, ourRec) >= 0 {
-			tflog.Info(ctx, "Record is already present, nothing to do: done")
-			err = nil
+			// still need to delete old value if not gone
+			tflog.Info(ctx, "Updated record is already present")
+			newPresent = true
 		} else {
 			apiUpdateRecs = append(apiUpdateRecs, ourRec)
+		}
+		if oldGone && newPresent {
+			tflog.Info(ctx, "Nothing left to do")
+			err = nil
+		} else {
 			err = r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
 		}
 	}
@@ -324,6 +365,8 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	ctx = setLogCtx(ctx, stateData, "delete")
 	tflog.Info(ctx, "delete: start")
 	defer tflog.Info(ctx, "delete: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecState := tf2model(stateData)
 

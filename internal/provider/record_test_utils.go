@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/mock"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/model"
 )
@@ -122,9 +123,8 @@ type testRecSet struct {
 }
 
 // create terraform config for N record with the same name but different values
-func makeTestRecSet(values []model.DNSRecordData) testRecSet {
+func makeTestRecSet(rectype model.DNSRecordType, values []model.DNSRecordData) testRecSet {
 	res := testRecSet{}
-	rectype := model.REC_A // for now it is always A, lets make a linter happy :)
 
 	templateString := `
 	provider "godaddy-dns" {}
@@ -238,5 +238,15 @@ func CheckApiRecordMach(resourceName string, apiClient *client.Client) resource.
 			return fmt.Errorf("result cross-check with API: none of %d results matched", len(apiRecs))
 		}
 		return nil
+	}
+}
+
+// helper function to use in mocks to trace execution path, like
+// mClientUpd.EXPECT().GetRecords(itsArgs).Once().Run(traceMarker("1st run"))
+func traceMarker(msg string) func(args mock.Arguments) {
+	return func(args mock.Arguments) {
+		// arg0 := args.Get(0).(*map[string]interface{})
+		// fmt.Printf("args are %v\n", args)
+		fmt.Println(msg)
 	}
 }
