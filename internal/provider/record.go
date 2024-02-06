@@ -173,6 +173,8 @@ func (r *RecordResource) Create(ctx context.Context, req resource.CreateRequest,
 	ctx = setLogCtx(ctx, planData, "create")
 	tflog.Info(ctx, "create: start")
 	defer tflog.Info(ctx, "create: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecPlan := tf2model(planData)
 	// add: does not check (read) if creating w/o prior state
@@ -199,6 +201,8 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	ctx = setLogCtx(ctx, stateData, "read")
 	tflog.Info(ctx, "read: start")
 	defer tflog.Info(ctx, "read: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecState := tf2model(stateData)
 
@@ -264,6 +268,8 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 	ctx = setLogCtx(ctx, planData, "update")
 	tflog.Info(ctx, "update: start")
 	defer tflog.Info(ctx, "update: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecPlan := tf2model(planData)
 
@@ -328,6 +334,8 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	ctx = setLogCtx(ctx, stateData, "delete")
 	tflog.Info(ctx, "delete: start")
 	defer tflog.Info(ctx, "delete: end")
+	r.reqMutex.Lock()
+	defer r.reqMutex.Unlock()
 
 	apiDomain, apiRecState := tf2model(stateData)
 
