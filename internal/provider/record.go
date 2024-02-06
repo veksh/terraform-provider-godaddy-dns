@@ -299,6 +299,11 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 				fmt.Sprintf("Getting DNS records to keep failed: %s", err))
 			return
 		}
+		oldGone := false
+		if err == errRecordGone {
+			tflog.Info(ctx, "Current record is already gone")
+			oldGone = true
+		}
 		tflog.Info(ctx, fmt.Sprintf("Got %d records to keep", len(apiUpdateRecs)))
 		// and finally, our record (TODO: SRV has more fields)
 		ourRec := model.DNSUpdateRecord{
@@ -306,13 +311,18 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 			TTL:      apiRecPlan.TTL,
 			Priority: apiRecPlan.Priority,
 		}
-		// TODO: probably cannot be by construction :)
-		// and comparing them this way is wrong anyway
+		newPresent := false
 		if slices.Index(apiUpdateRecs, ourRec) >= 0 {
-			tflog.Info(ctx, "Record is already present, nothing to do: done")
-			err = nil
+			// still need to delete old value if not gone
+			tflog.Info(ctx, "Updated record is already present")
+			newPresent = true
 		} else {
 			apiUpdateRecs = append(apiUpdateRecs, ourRec)
+		}
+		if oldGone && newPresent {
+			tflog.Info(ctx, "Nothing left to do")
+			err = nil
+		} else {
 			err = r.client.SetRecords(ctx, apiDomain, apiRecPlan.Type, apiRecPlan.Name, apiUpdateRecs)
 		}
 	}
