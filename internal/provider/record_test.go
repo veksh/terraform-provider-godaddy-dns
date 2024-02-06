@@ -74,16 +74,17 @@ func TestUnitALifecycle(t *testing.T) {
 	// mockClientAdd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt2.UpdRecords).Return(nil).Once()
 
 	// read, update, then delete for clean-up
+	// augmented with trace markers to clarify the order a bit
 	mockClientUpd := model.NewMockDNSApiClient(t)
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(3)
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsToUpdTgt.UpdRecords).Return(nil).Once()
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(3).Run(traceMarker("get 1 (mRegsTgt)"))
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsToUpdTgt.UpdRecords).Return(nil).Once().Run(traceMarker("set 1 (mRecsToUpdTgt)"))
 	// again, clean-up order is not deterministic, so lets return same results to both and see them keeping pre
 	// better way would be "3 recs -> del 3rd -> 2 recs -> del 2nd -> only pre-existing left"
 	// the problem is that clean-up is going in parallel, so it is hard to return a proper results,
 	// and there is no way to express these dependencies in mock
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsToUpdTgt.Records, nil).Times(4)
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once()
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt4.UpdRecords).Return(nil).Once()
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsToUpdTgt.Records, nil).Times(4).Run(traceMarker("get 2 (mRecsToUpdTgt)"))
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt4.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/1 (mRecsTgt4)"))
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/2 (mRecsTgt1)"))
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
