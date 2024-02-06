@@ -402,7 +402,6 @@ func TestUnitTXTWithAnother(t *testing.T) {
 	mRecs := makeTestRecSet(mType, []model.DNSRecordData{mData})
 	mRecsPlusPre := makeTestRecSet(mType, []model.DNSRecordData{mDataPre, mData})
 	mName := mRecs.DNSRecName
-	// tfResName := mRecs.TFResName
 
 	mDataChanged := model.DNSRecordData("changed text" + IMPORT_SEP + " here")
 	// mRecsChange := makeTestRecSet(mType, []model.DNSRecordData{mDataChanged})
@@ -458,8 +457,9 @@ func TestUnitTXTWithAnother(t *testing.T) {
 			{
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientUpd),
 				Config:                   mRecsChanged.TFConfig,
+				// not working with mRecs.TFResName + "[0]"
 				// Check: resource.ComposeAggregateTestCheckFunc(
-				// 	resource.TestCheckResourceAttr(tfResName, "data", string(mDataChanged)),
+				// 	resource.TestCheckResourceAttr(mRecs.TFResName, "data", string(mDataChanged)),
 				// ),
 			},
 		},
