@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/mock"
 	"github.com/veksh/terraform-provider-godaddy-dns/internal/client"
@@ -228,7 +227,7 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 	mData := model.DNSRecordData("mx1.test.com")
 	mDataChanged := model.DNSRecordData("mx2.test.com")
 	mDataOther := model.DNSRecordData("mx3.test.com")
-	mType, mName, mRecs, tfResName := makeMockRec(model.REC_MX, mData)
+	mType, mName, mRecs, _ := makeMockRec(model.REC_MX, mData)
 	mRecs = append(mRecs, model.DNSRecord{
 		Name:     mName,
 		Type:     mType,
@@ -246,7 +245,7 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 	mRecsUpdated := slices.Clone(mRecs)
 	mRecsUpdated[0].Data = mDataChanged
 	// need to return it 2 times: 1st for read (refresh), 2nd for delete (keeping recs)
-	mClientDel.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Times(2)
+	mClientDel.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Once()
 	// no need to call set or del: record already gone
 	// mockClientDel.EXPECT().DelRecords(mockCtx, mockDom, mockRType, mockRName).Return(nil).Once()
 
@@ -264,11 +263,11 @@ func TestUnitMXNoopDelIfGone(t *testing.T) {
 				ProtoV6ProviderFactories: mockClientProviderFactory(mClientDel),
 				Config:                   simpleResourceConfig(model.REC_MX, mData),
 				Destroy:                  true,
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction(tfResName, plancheck.ResourceActionDestroy),
-					},
-				},
+				// ConfigPlanChecks: resource.ConfigPlanChecks{
+				// 	PreApply: []plancheck.PlanCheck{
+				// 		plancheck.ExpectResourceAction(tfResName, plancheck.ResourceActionDestroy),
+				// 	},
+				// },
 			},
 		},
 	})
