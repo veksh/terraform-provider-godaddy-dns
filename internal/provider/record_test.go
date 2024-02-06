@@ -493,15 +493,14 @@ func TestUnitTXTLifecycle(t *testing.T) {
 	// read, update, clean up
 	// also: must skip update if already ok
 	mClientUpd := model.NewMockDNSApiClient(t)
-	rec2set := []model.DNSUpdateRecord{{Data: mDataChanged, TTL: 3600}}
+	// rec2set := []model.DNSUpdateRecord{{Data: mDataChanged, TTL: 3600}}
 	mRecsUpdated := slices.Clone(mRecs)
 	mRecsUpdated[0].Data = mDataChanged
-	// need to return it 2 times: 1st for read (refresh), 2nd for uptate (keeping recs)
-	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecs, nil).Times(2)
-	mClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, rec2set).Return(nil).Once()
-	// same thing with delete
-	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Times(2)
-	mClientUpd.EXPECT().DelRecords(mCtx, mDom, mType, mName).Return(nil).Once()
+	// state is already refreshed on previous step
+	mClientUpd.EXPECT().AddRecords(mCtx, mDom, mRecsUpdated).Return(nil).Once().Run(traceMarker("add 1"))
+	// refresh + read-keep + delete: cleanup
+	mClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsUpdated, nil).Twice().Run(traceMarker("get 1"))
+	mClientUpd.EXPECT().DelRecords(mCtx, mDom, mType, mName).Return(nil).Once().Run(traceMarker("del 1"))
 
 	resource.UnitTest(t, resource.TestCase{
 		// ProtoV6ProviderFactories: testProviderFactory,
