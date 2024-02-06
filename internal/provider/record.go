@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -64,11 +65,14 @@ func tf2model(tfData tfDNSRecord) (model.DNSDomain, model.DNSRecord) {
 
 // RecordResource defines the implementation of GoDaddy DNS RR
 type RecordResource struct {
-	client model.DNSApiClient
+	client   model.DNSApiClient
+	reqMutex *sync.Mutex
 }
 
-func NewRecordResource() resource.Resource {
-	return &RecordResource{}
+func RecordResourceFactory(m *sync.Mutex) func() resource.Resource {
+	return func() resource.Resource {
+		return &RecordResource{reqMutex: m}
+	}
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

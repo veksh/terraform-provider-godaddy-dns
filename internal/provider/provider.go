@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"os"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -25,6 +26,7 @@ type GoDaddyDNSProvider struct {
 	// "dev" for local testing, "test" for acceptance tests, "v1.2.3" for prod
 	version       string
 	clientFactory APIClientFactory
+	reqMutex      sync.Mutex
 }
 
 func (p *GoDaddyDNSProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -108,7 +110,7 @@ func (p *GoDaddyDNSProvider) Configure(ctx context.Context, req provider.Configu
 
 func (p *GoDaddyDNSProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewRecordResource,
+		RecordResourceFactory(&p.reqMutex),
 	}
 }
 
@@ -124,6 +126,7 @@ func New(version string, clientFactory APIClientFactory) func() provider.Provide
 		return &GoDaddyDNSProvider{
 			version:       version,
 			clientFactory: clientFactory,
+			reqMutex:      sync.Mutex{},
 		}
 	}
 }
