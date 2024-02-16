@@ -9,8 +9,7 @@ import (
 
 const (
 	// number of seconds required to refresh all tokens
-	TOKEN_REFRESH_TIME = 60
-	TOKEN_REFRESH_AS_SECONDS = time.Second * TOKEN_REFRESH_TIME
+	TOKEN_REFRESH_AS_SECONDS = time.Second * 60
 )
 
 // simple token bucket rate limiter
@@ -47,14 +46,14 @@ func (s *RateLimiter) Wait() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// if bucket is empty: wait for TOKEN_REFRESH_TIME seconds since the first token was used, refill the bucket to (bucketSize),
+	// if bucket is empty: wait for TOKEN_REFRESH_AS_SECONDS seconds since the first token was used, refill the bucket to (bucketSize),
 	// and set the first token time to time.Now() to set the new start of the period.
 	// this will help us comply with the GoDaddy APIs, which limit us to 60 requests every minute per endpoint.
 	// See: https://developer.godaddy.com/getstarted#terms
 	if s.numTokens <= 0 {
 
-		// if less than TOKEN_REFRESH_TIME seconds has passed since firstTokenUsedTime,
-		// calculate firstTokenUsedTime + TOKEN_REFRESH_TIME and sleep until that time
+		// if fewer than TOKEN_REFRESH_AS_SECONDS seconds have passed since firstTokenUsedTime,
+		// calculate firstTokenUsedTime + TOKEN_REFRESH_AS_SECONDS and sleep until that time
 		if (time.Since(s.firstTokenUsedTime) <= TOKEN_REFRESH_AS_SECONDS) {
 			minimumRefreshTime := s.firstTokenUsedTime.Add(TOKEN_REFRESH_AS_SECONDS)
 			requiredTokenRefreshDuration := time.Since(minimumRefreshTime).Abs()
@@ -88,7 +87,7 @@ func (s *RateLimiter) WaitCtx(ctx context.Context) error {
 	// this is unique to the GoDaddy APIs, which limit us to 60 requests every minute per endpoint.
 	// See: https://developer.godaddy.com/getstarted#terms
 	if s.numTokens <= 0 {
-		// if less than TOKEN_REFRESH_AS_SECONDS seconds has passed since firstTokenUsedTime,
+		// if fewer than TOKEN_REFRESH_AS_SECONDS seconds have passed since firstTokenUsedTime,
 		// calculate firstTokenUsedTime + TOKEN_REFRESH_AS_SECONDS and sleep until that time
 		requiredTokenRefreshDuration := time.Second * 0
 		if (time.Since(s.firstTokenUsedTime) <= TOKEN_REFRESH_AS_SECONDS) {
