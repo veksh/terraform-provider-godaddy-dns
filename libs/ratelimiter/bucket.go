@@ -14,7 +14,7 @@ import (
 //   - check the time since a token was added, mb add some more
 //   - spend one if now it is available
 //   - if none, wait until next one will be available (while holding mutex)
-type RateLimiter struct {
+type BucketRateLimiter struct {
 	mu sync.Mutex
 	// interval between tokens, s
 	period time.Duration
@@ -27,11 +27,11 @@ type RateLimiter struct {
 }
 
 // context to cancel, rate per second, burst (bucket) size
-func New(rate, burst int) (*RateLimiter, error) {
+func NewBucketRL(rate, burst int) (Limiter, error) {
 	if rate <= 0 || burst <= 0 {
 		return nil, errors.New("limiter rate and burst must be positive")
 	}
-	return &RateLimiter{
+	return &BucketRateLimiter{
 		period:        time.Second / time.Duration(rate),
 		bucketSize:    burst,
 		numTokens:     burst,
@@ -40,7 +40,7 @@ func New(rate, burst int) (*RateLimiter, error) {
 }
 
 // block until token becomes available
-func (s *RateLimiter) Wait() {
+func (s *BucketRateLimiter) Wait() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// if bucket is empty: add tokens that are due, update last refill time
@@ -67,7 +67,7 @@ func (s *RateLimiter) Wait() {
 }
 
 // block until token becomes available, with cancellable context
-func (s *RateLimiter) WaitCtx(ctx context.Context) error {
+func (s *BucketRateLimiter) WaitCtx(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

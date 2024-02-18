@@ -50,12 +50,11 @@ func NewClient(apiURL string, key string, secret string) (*Client, error) {
 		MaxConnsPerHost:       10,
 		IdleConnTimeout:       60,
 	}
-	rateLimiter, err := ratelimiter.New(HTTP_RPS, HTTP_BURST)
+	rateLimiter, err := ratelimiter.NewBucketRL(HTTP_RPS, HTTP_BURST)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create rate limiter")
 	}
 	httpClient := http.Client{
-		Timeout: HTTP_TIMEOUT * time.Second,
 		Transport: &rateLimitedHTTPTransport{
 			limiter: rateLimiter,
 			next:    httpTransport,
@@ -92,9 +91,6 @@ type apiErrorResponce struct {
 func (c Client) makeRecordsRequest(ctx context.Context, path string, method string, body io.Reader) (*http.Response, error) {
 
 	requestURL, _ := url.JoinPath(c.apiURL, DOMAINS_URL, path)
-
-	ctx, fnCancel := context.WithTimeout(ctx, HTTP_TIMEOUT*time.Second)
-	defer fnCancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {

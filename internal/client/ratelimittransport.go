@@ -7,11 +7,11 @@ import (
 )
 
 type rateLimitedHTTPTransport struct {
-	limiter *ratelimiter.RateLimiter
+	limiter ratelimiter.Limiter
 	next    http.RoundTripper
 }
 
 func (t *rateLimitedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.limiter.Wait()
+	t.limiter.WaitCtx(req.Context())
 	return t.next.RoundTrip(req)
 }
