@@ -9,7 +9,7 @@ import (
 
 // fixed winow rate limiter: limit number of request allowed per time interval
 // - keeps track of interval start and last call time
-// - on aquire:
+// - on acquire:
 //   - if last call was > interval length ago, refill bucket
 //   - if there are tokens available, spend one and return immediately
 //   - if not, wait until the end of interval, refill and spend one

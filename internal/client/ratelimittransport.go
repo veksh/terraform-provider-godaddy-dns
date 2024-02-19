@@ -12,6 +12,8 @@ type rateLimitedHTTPTransport struct {
 }
 
 func (t *rateLimitedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.limiter.WaitCtx(req.Context())
+	if err := t.limiter.WaitCtx(req.Context()); err != nil {
+		return nil, err
+	}
 	return t.next.RoundTrip(req)
 }
