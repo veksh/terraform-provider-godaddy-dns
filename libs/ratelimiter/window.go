@@ -60,7 +60,6 @@ func (s *WindowRateLimiter) Wait() {
 		s.numTokens = s.bucketSize
 	}
 	s.numTokens--
-	return
 }
 
 // block until token becomes available, with cancellable context
