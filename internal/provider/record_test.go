@@ -52,7 +52,7 @@ func TestUnitALifecycle(t *testing.T) {
 	// 2nd step: update
 	mRecsToUpd := makeTestRecSet(model.REC_A, []model.DNSRecordData{"2.2.2.2", "4.4.4.4"})
 	mRecsToUpdTgt := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "2.2.2.2", "4.4.4.4"})
-	// mRecsTgt4 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
+	mRecsTgt4 := makeTestRecSet(model.REC_A, []model.DNSRecordData{"1.1.1.1", "4.4.4.4"})
 
 	mType, mName := model.REC_A, mRecsPre.DNSRecName
 
@@ -67,11 +67,31 @@ func TestUnitALifecycle(t *testing.T) {
 	mockClientUpd := model.NewMockDNSApiClient(t)
 	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt.Records, nil).Times(3).Run(traceMarker("get 1 (mRegsTgt)*3"))
 	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsToUpdTgt.UpdRecords).Return(nil).Once().Run(traceMarker("set 1 (mRecsToUpdTgt)"))
-	// again, clean-up order is not deterministic, so those are a bit fragile
 	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsToUpdTgt.Records, nil).Times(3).Run(traceMarker("get 2/1 (mRecsToUpdTgt)*3"))
-	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil).Once().Run(traceMarker("get 2/2 (mRecsTgt1)"))
 
-	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/1 (mRecsTgt1)"))
+	// again, clean-up order is not deterministic, so those are a bit fragile
+	// mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Maybe().Run(traceMarker("set 2/1 (mRecsTgt1)?"))
+	// mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt4.UpdRecords).Return(nil).Maybe().Run(traceMarker("set 2/1 (mRecsTgt4)?"))
+	var res1or4 []model.DNSRecord
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt1.UpdRecords).Return(nil).Maybe().
+		Run(func(args mock.Arguments) {
+			fmt.Println("set 2/1 (mRecsTgt1)", args[4])
+			res1or4 = mRecsTgt1.Records
+		})
+	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsTgt4.UpdRecords).Return(nil).Maybe().
+		Run(func(args mock.Arguments) {
+			fmt.Println("set 2/1 (mRecsTgt4)")
+			res1or4 = mRecsTgt4.Records
+		})
+
+	// need to return right results depending on set above: either tgt1 or tgt4, whichever comes first
+	// mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(mRecsTgt1.Records, nil).Once().Run(traceMarker("get 2/2 (mRecsTgt1)"))
+	// sadly it does not work this way: Return captures empty slice
+	mockClientUpd.EXPECT().GetRecords(mCtx, mDom, mType, mName).Return(res1or4, nil).Once().
+		Run(func(args mock.Arguments) {
+			fmt.Println("get 2/2 (mRecsTgt1/4?) " + res1or4[1].Data)
+		})
+
 	mockClientUpd.EXPECT().SetRecords(mCtx, mDom, mType, mName, mRecsPre.UpdRecords).Return(nil).Once().Run(traceMarker("set 2/2 (mRecsPre)"))
 
 	resource.UnitTest(t, resource.TestCase{
