@@ -23,9 +23,13 @@ import (
 
 const (
 	HTTP_TIMEOUT = 10
-	HTTP_RPS     = 1
-	HTTP_BURST   = 60
-	DOMAINS_URL  = "/v1/domains/"
+	// burst RL: not currently used
+	HTTP_RPS   = 1
+	HTTP_BURST = 60
+	// window RL: window size, max requests per window
+	HTTP_RATE_WINDOW = time.Duration(60) * time.Second
+	HTTP_RATE_RPW    = 60
+	DOMAINS_URL      = "/v1/domains/"
 )
 
 var _ model.DNSApiClient = Client{}
@@ -45,17 +49,14 @@ func NewClient(apiURL string, key string, secret string) (*Client, error) {
 			Timeout: HTTP_TIMEOUT * time.Second}).DialContext,
 		TLSHandshakeTimeout:   HTTP_TIMEOUT * time.Second,
 		ResponseHeaderTimeout: HTTP_TIMEOUT * time.Second,
-		MaxIdleConns:          10,
-		MaxIdleConnsPerHost:   10,
-		MaxConnsPerHost:       10,
-		IdleConnTimeout:       60,
 	}
-	rateLimiter, err := ratelimiter.New(HTTP_RPS, HTTP_BURST)
+	// TODO: mb make it pluggable as a parameter
+	// rateLimiter, err := ratelimiter.NewBucketRL(HTTP_RPS, HTTP_BURST)
+	rateLimiter, err := ratelimiter.NewWindowRL(HTTP_RATE_WINDOW, HTTP_RATE_RPW)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot create rate limiter")
 	}
 	httpClient := http.Client{
-		Timeout: HTTP_TIMEOUT * time.Second,
 		Transport: &rateLimitedHTTPTransport{
 			limiter: rateLimiter,
 			next:    httpTransport,
@@ -92,9 +93,6 @@ type apiErrorResponce struct {
 func (c Client) makeRecordsRequest(ctx context.Context, path string, method string, body io.Reader) (*http.Response, error) {
 
 	requestURL, _ := url.JoinPath(c.apiURL, DOMAINS_URL, path)
-
-	ctx, fnCancel := context.WithTimeout(ctx, HTTP_TIMEOUT*time.Second)
-	defer fnCancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
