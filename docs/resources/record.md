@@ -164,7 +164,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 ### Optional
 
 - `priority` (Number) Record priority, required for MX (lower is higher)
-- `ttl` (Number) Record time-to-live, >= 600s < 86400s, default 3600 seconds (1 hour)
+- `ttl` (Number) Record time-to-live, >= 600s < 604800s (1 week), default 3600 seconds (1 hour)
 
 ## Import
 
