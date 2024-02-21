@@ -124,13 +124,13 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Required:            true,
 			},
 			"ttl": schema.Int64Attribute{
-				MarkdownDescription: "Record time-to-live, >= 600s < 86400s, default 3600 seconds (1 hour)",
+				MarkdownDescription: "Record time-to-live, >= 600s <= 604800s (1 week), default 3600 seconds (1 hour)",
 				Optional:            true,
 				Computed:            true, // must be computed to use a default
 				Default:             int64default.StaticInt64(3600),
 				Validators: []validator.Int64{
 					int64validator.AtLeast(600),
-					int64validator.AtMost(86400),
+					int64validator.AtMost(604800),
 				},
 			},
 			"priority": schema.Int64Attribute{
