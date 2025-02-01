@@ -4,9 +4,9 @@ This plug-in enables the management of individual DNS resource records for domai
 
 It only manages DNS (no e.g. domain management) and aims to manage individual DNS resource records (not the whole domain), while preserving existent records and tolerating external modifications.
 
-## GoDaddy API access restrictions
+## GoDaddy API access restrictions and the end of active development for this provider
 
-Unfortunately, at the start of May 2024 GoDaddy suddenly decided to restrict access to their DNS management API. There were no announcements of this policy change and as of 2024.05.08 it is still not reflected in [developers' documentation](https://developer.godaddy.com/getstarted), but there are [many](https://www.reddit.com/r/godaddy/comments/1chs1j8/godaddy_access_denied_via_apicall/) [reports](https://www.reddit.com/r/godaddy/comments/1bl0f5r/am_i_the_only_one_who_cant_use_the_api/) of the same [problem](https://community.letsencrypt.org/t/getting-unauthorized-url-error-while-trying-to-get-cert-for-subdomains/217329) (i.e. getting an "Authenticated user is not allowed access" error while accessing DNS API with the valid keys). So for now the development of this provider is stopped.
+Unfortunately, at the start of May 2024 GoDaddy suddenly decided to restrict access to their DNS management API: all API calls started to fail with the cryptic error message ("Authenticated user is not allowed access"). There were no official announcements or explanation for a while, but eventually they updated the [documentation page](https://developer.godaddy.com/getstarted#apiaccess) with the new requirements: DNS API access is now available only to accounts with 10 or more registered domains, or having an active Discount Domain Club Premier Membership plan. Currently I have neither, and so cannot use API for domain management or for integration testing. Thus, the active development of this provider is stopped: it will continue to work for eligible users until the API itself will change in incompatible way. According to the same document, this could happen ["at any time and for any reason without any prior notice or liability to you"](https://developer.godaddy.com/getstarted#apichange)), so caveat emptor.
 
 ## Usage
 
